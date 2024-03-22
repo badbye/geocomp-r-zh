@@ -1,0 +1,30 @@
+book_filename: 地理计算与R语言
+rmd_files:
+    - "index.Rmd"
+    - "00-foreword-preface.Rmd"
+    - "01-introduction.Rmd"
+    - "02-geographic-data-in-r.Rmd"
+    # - "03-attribute-data-operations.Rmd"
+    # - "04-spatial-data-operations.Rmd"
+    # - "05-geometry-operations.Rmd"
+    # - "06-reprojecting.Rmd"
+    # - "07-geographic-data-io.Rmd"
+    # - "08-making-maps-with-r.Rmd"
+    # - "09-bridge-to-gis.Rmd"
+    # - "10-scripts.Rmd"
+    # - "11-statistical-learning.Rmd"
+    # - "12-transportation.Rmd"
+    # - "13-geomarketing.Rmd"
+    # - "14-ecology.Rmd"
+    # - "15-conclusion.Rmd"
+    # - "references.Rmd"
+new_session: yes
+before_chapter_script: ["code/before_script.R"]
+delete_merged_file: true
+language:
+  label:
+    fig: "图 "
+    tab: "表 "
+  ui:
+    edit: "编辑"
+    chapter_name: ["第 ", " 章"]

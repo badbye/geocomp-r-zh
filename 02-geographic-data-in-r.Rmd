@@ -1,0 +1,1396 @@
+<!-- # (PART) Foundations {-} -->
+# (第一部分) 基础 {-}
+
+<!-- TODO:
+1. 校验原文
+2. 校验引用
+3. 译文细节修改
+ -->
+
+<!-- # Geographic data in R {#spatial-class} -->
+# R 语言中的地理数据 {#spatial-class}
+
+<!-- ## Prerequisites {-} -->
+## 前提要求 {-}
+
+<!-- This is the first practical chapter of the book, and therefore it comes with some software requirements.
+We assume that you have an up-to-date version of R installed and that you are comfortable using software with a command-line interface such as the integrated development environment (IDE) RStudio. -->
+
+这是本书的第一个实操章节，因此需要安装一些软件。我们假设你已经安装了最新版本的 R，并且熟悉使用带有命令行界面的软件，例如集成开发环境（IDE）RStudio。
+
+<!-- If you are new to R, we recommend reading Chapter 2 of the online book *Efficient R Programming* by @gillespie_efficient_2016 and learning the basics of the language with reference to resources such as @grolemund_r_2016 or [DataCamp](https://www.datacamp.com/courses/free-introduction-to-r) before proceeding.
+Organize your work (e.g., with RStudio projects) and give scripts sensible names such as `chapter-02.R` to document the code you write as you learn. -->
+
+如果你是 R 的初学者，我们建议你阅读 @gillespie_efficient_2016 的在线书籍 *Efficient R Programming* 第 2 章，并参考 @grolemund_r_2016 或 [DataCamp](https://www.datacamp.com/courses/free-introduction-to-r) 等资源学习 R 语言的基础知识。请管理好你的学习成果（比如创建多个 RStudio 项目），并给脚本起有意义的名字如`chapter-02.R`，以记录你学习时编写的代码。
+
+<!-- The packages used in this chapter can be installed with the following commands:^[
+**spDataLarge** is not on CRAN, meaning it must be installed via **devtools** or with the following command: `install.packages("spDataLarge", repos = "https://nowosad.github.io/drat/", type = "source")`.] -->
+
+本章中使用的软件包可以使用以下命令进行安装：^[
+**spDataLarge** 不在 CRAN 上，因此必须使用 **devtools** 或以下命令进行安装`install.packages("spDataLarge", repos = "https://nowosad.github.io/drat/", type = "source")`.]
+
+```{r 02-spatial-data-1, eval=FALSE}
+install.packages("sf")
+install.packages("raster")
+install.packages("spData")
+devtools::install_github("Nowosad/spDataLarge")
+```
+
+```{block2 02-spatial-data-2, type='rmdnote'}
+<!-- If you're running Mac or Linux, the previous command to install **sf** may not work first time.
+These operating systems (OSs) have 'systems requirements' that are described in the package's [README](https://github.com/r-spatial/sf).
+Various OS-specific instructions can be found online, such as the article *Installation of R 3.5 on Ubuntu 18.04* on the blog [rtask.thinkr.fr](https://rtask.thinkr.fr/blog/installation-of-r-3-5-on-ubuntu-18-04-lts-and-tips-for-spatial-packages/). -->
+如果你使用的是 Mac 或 Linux 系统，安装 **sf** 可能会遇到些麻烦。这些操作系统需要先安装“系统依赖”，这些依赖在包的 [README](https://github.com/r-spatial/sf) 中有描述。可以在网上找到各种特定于操作系统的说明，例如博客 rtask.thinkr.fr 上的文章 [Installation of R 3.5 on Ubuntu 18.04](https://rtask.thinkr.fr/blog/installation-of-r-3-5-on-ubuntu-18-04-lts-and-tips-for-spatial-packages/)。
+```
+
+<!-- All the packages needed to reproduce the contents of the book can be installed with the following command: `devtools::install_github("geocompr/geocompkg")`.
+The necessary packages can be 'loaded' (technically they are attached) with the `library()` function as follows: -->
+要复现本书内容所需的所有软件包，可以用以下命令进行安装：
+
+`devtools::install_github("geocompr/geocompkg")`。这些软件包可以用以下方式“加载”（技术上说，是把它们附加到环境中）：
+
+```{r 02-spatial-data-3, message=FALSE}
+library(sf)          # 矢量数据相关的类和函数
+library(raster)      # 栅格数据相关的类和函数
+```
+
+<!-- The other packages that were installed contain data that will be used in the book: -->
+以下安装的软件包中，包含了本书将使用的数据：
+```{r 02-spatial-data-4, results='hide'}
+library(spData)        # 加载地理学数据集
+library(spDataLarge)   # 加载大型地理学数据集
+```
+
+<!-- ## Introduction {#intro-spatial-class} -->
+## 导读 {#intro-spatial-class}
+
+<!-- This chapter will provide brief explanations of the fundamental geographic data models: vector and raster.
+We will introduce the theory behind each data model and the disciplines in which they predominate, before demonstrating their implementation in R. -->
+本章将简要介绍基本的地理数据模型：矢量（vector）和栅格（raster）。在演示它们在 R 中的实现之前，我们将介绍每个数据模型背后的理论和它们主导的学科。
+
+<!-- The *vector data model* represents the world using points, lines and polygons.
+These have discrete, well-defined borders, meaning that vector datasets usually have a high level of precision (but not necessarily accuracy as we will see in Section \@ref(units)).
+The *raster data model* divides the surface up into cells of constant size.
+Raster datasets are the basis of background images used in web-mapping and have been a vital source of geographic data since the origins of aerial photography and satellite-based remote sensing devices.
+Rasters aggregate spatially specific features to a given resolution, meaning that they are consistent over space and scalable (many worldwide raster datasets are available). -->
+*矢量数据模型* 使用点、线和多边形来表示世界。它们具有离散、明确定义的边界，因此矢量数据集通常具有高精度（但不一定准确，如第 \@ref(units) 节所述）^[译者注: 高精度（precision）是指在数据的边界上有清晰的细节，而高度准确（accuracy）是指数据的边界要在正确的位置上。]。
+*栅格数据模型* 将表面划分成固定大小的单元格。栅格数据集是网络地图中使用的背景图的基础，自航空摄影和卫星遥感技术问世以来，一直是地理数据的重要来源。栅格数据将具有空间特定特征的数据聚合到给定的分辨率中，这意味着它们在空间上是一致的并且可扩展的（许多全球栅格数据集可用）。
+
+<!-- Which to use?
+The answer likely depends on your domain of application:
+
+- Vector data tends to dominate the social sciences because human settlements tend to have discrete borders.
+- Raster often dominates in environmental sciences because of the reliance on remote sensing data.  -->
+哪种数据模型更好？答案可能取决于你的应用领域：
+
+- 矢量数据在社会科学中占主导地位，因为人类定居点往往具有离散的边界。
+- 栅格数据通常在环境科学中占主导地位，因为它们依赖于遥感数据。 
+  
+<!-- There is much overlap in some fields and raster and vector datasets can be used together:
+ecologists and demographers, for example, commonly use both vector and raster data.
+Furthermore, it is possible to convert between the two forms (see Section \@ref(raster-vector)).
+Whether your work involves more use of vector or raster datasets, it is worth understanding the underlying data model before using them, as discussed in subsequent chapters.
+This book uses **sf** and **raster** packages to work with vector data and raster datasets, respectively. -->
+
+在某些存在很大重叠的领域，栅格和矢量数据集可以一起使用：例如，生态学家和人口统计学家通常同时使用矢量和栅格数据。此外，矢量和栅格可以相互转换（见第 \@ref(raster-vector) 节）。无论你的工作涉及更多矢量数据集还是更多栅格数据集，都值得在使用它们之前了解底层数据模型，后续章节将讨论这些内容。本书分别使用 **sf** 和 **raster** 软件包来处理矢量数据和栅格数据集。
+
+<!-- ## Vector data -->
+## 矢量数据 {#vector-data}
+
+```{block2 02-spatial-data-5, type="rmdnote"}
+<!-- Take care when using the word 'vector' as it can have two meanings in this book:
+geographic vector data and the `vector` class (note the `monospace` font) in R.
+The former is a data model, the latter is an R class just like `data.frame` and `matrix`.
+Still, there is a link between the two: the spatial coordinates which are at the heart of the geographic vector data model can be represented in R using `vector` objects. -->
+
+在使用“vector”一词时要小心，因为它在本书中有两个含义：地理矢量数据和 R 中的`vector`。前者是数据模型，后者是 R 中的数据结构，就像`data.frame`和`matrix`一样。尽管如此，两者之间仍然存在联系：地理矢量数据模型的核心是可以使用 `vector` 对象在 R 中表示空间坐标。^[译者注：R 语言中的`vector`类通常被翻译为“向量”；地理数据中的“vector data”则被翻译为“矢量数据”。在英文中都使用了“vector”这个词，容易造成混淆，中文语境下则没有这个问题。]
+```
+
+<!-- The geographic vector model is based on points located within a coordinate reference system (CRS).
+Points can represent self-standing features (e.g., the location of a bus stop) or they can be linked together to form more complex geometries such as lines and polygons.
+Most point geometries contain only two dimensions (3-dimensional CRSs contain an additional $z$ value, typically representing height above sea level). -->
+
+地理矢量模型基于坐标参考系统（Coordinate Reference Systems，CRS）中的点。点可以表示独立的特征（例如，公交车站的位置），也可以将它们连接在一起形成更复杂的几何图形，例如线和多边形。大多数点数据仅包含两个维度（3 维坐标系会包含额外的 $z$ 值，通常表示海拔高度）。
+
+<!-- 
+In this system London, for example, can be represented by the coordinates `c(-0.1, 51.5)`.
+This means that its location is -0.1 degrees east and 51.5 degrees north of the origin.
+The origin in this case is at 0 degrees longitude (the Prime Meridian) and 0 degree latitude (the Equator) in a geographic ('lon/lat') CRS (Figure \@ref(fig:vectorplots), left panel).
+The same point could also be approximated in a projected CRS with 'Easting/Northing' values of `c(530000, 180000)` in the [British National Grid](https://en.wikipedia.org/wiki/Ordnance_Survey_National_Grid), meaning that London is located 530 km *East* and 180 km *North* of the $origin$ of the CRS.
+This can be verified visually: slightly more than 5 'boxes' --- square areas bounded by the gray grid lines 100 km in width --- separate the point representing London from the origin (Figure \@ref(fig:vectorplots), right panel). -->
+
+举例来说，坐标系统中伦敦可以由坐标`c(-0.1, 51.5)`表示。这意味着它位于原点的东经 0.1 度和北纬 51.5 度。在这种情况下，原点位于地理（'lon/lat'）CRS 中的 0 度经度（本初子午线）和 0 度纬度（赤道）（图\@ref(fig:vectorplots)，左面板）。同样的点也可以在投影后的[英国网格参考系统（British National Grid）](https://en.wikipedia.org/wiki/Ordnance_Survey_National_Grid)中用'Easting/Northing'值`c(530000, 180000)`来近似，这意味着伦敦位于 CRS 原点的东经 530 公里和北纬 180 公里处。这可以通过视觉验证：表示伦敦的点与原点之间有略多于 5 个“网格”，每个网格是以灰色网格线为界的、宽度为100公里的正方形区域（图\@ref(fig:vectorplots)，右面板）。
+
+<!-- The location of National Grid's origin, in the sea beyond South West Peninsular, ensures that most locations in the UK have positive Easting and Northing values.^[
+The origin we are referring to, depicted in blue in Figure \@ref(fig:vectorplots), is in fact the 'false' origin.
+The 'true' origin, the location at which distortions are at a minimum, is located at 2° W and 49° N.
+This was selected by the Ordnance Survey to be roughly in the center of the British landmass longitudinally.]
+There is more to CRSs, as described in Sections \@ref(crs-intro) and \@ref(reproj-geo-data) but, for the purposes of this section, it is sufficient to know that coordinates consist of two numbers representing distance from an origin, usually in $x$ then $y$ dimensions. -->
+
+英国网格参考系统的原点位于西南半岛以外的海域，这确保了英国大多数地点的东向和北向坐标值为正。^[我们所指的原点如图 \@ref(fig:vectorplots) 中所示，实际上是“虚假”的原点。 “真正”的原点，即畸变最小的位置，位于 2°W 和 49°N。这是由英国测量局选择的，纵向大致位于英国陆地的中心。] 关于 CRS 还有更多内容，请参见第 \@ref(crs-intro) 和第 \@ref(reproj-geo-data) 节，但本节的目标是，只需知道坐标由两个数字组成，通常是 $x$ 维度在前 $y$ 维度在后，它们表示了与原点之间的距离。
+
+```{r vectorplots-source, include=FALSE, eval=FALSE}
+source("code/02-vectorplots.R") # generate subsequent figure
+```
+
+
+<!-- Illustration of vector (point) data in which location of London (the red X) is represented with reference to an origin (the blue circle). The left plot represents a geographic CRS with an origin at 0° longitude and latitude. The right plot represents a projected CRS with an origin located in the sea west of the South West Peninsula.  -->
+
+```{r vectorplots, fig.cap="矢量（点）数据的示例，其中伦敦的位置（红色 X）是相对于原点（蓝色圆圈）表示的。左图表示一个地理坐标参考系，其原点位于 0°经度和纬度。右图表示一个投影坐标参考系，其原点位于西南半岛以外的海域。", out.width="49%", fig.show='hold', echo=FALSE, fig.scap="矢量数据（点）的示例。"}
+knitr::include_graphics(c("figures/vector_lonlat.png", "figures/vector_projected.png"))
+```
+
+<!-- **sf** is a package providing a class system for geographic vector data.
+Not only does **sf** supersede **sp**, it also provides a consistent command-line interface to GEOS and GDAL, superseding **rgeos** and **rgdal** (described in Section \@ref(the-history-of-r-spatial)).
+This section introduces **sf** classes in preparation for subsequent chapters (Chapters \@ref(geometric-operations) and \@ref(read-write) cover the GEOS and GDAL interface, respectively). -->
+
+**sf** 是一个为矢量数据提供类型支持的 R 包。它不仅取代了 **sp** 包，还提供了一个与 GEOS 和 GDAL 一致的命令行接口，取代了 **rgeos** 和 **rgdal**（在第 \@ref(the-history-of-r-spatial) 节中介绍）。本节介绍 **sf** 类，为后续章节（第 \@ref(geometric-operations) 和第 \@ref(read-write) 章分别介绍 GEOS 和 GDAL 接口）做准备。
+
+<!-- Commented out: not really necessary here - keeping as could be useful elsewhere: -->
+<!-- In mathematical notation these points are typically represented as numbers separated by commas and enclosed by a pair of brackets:  -->
+<!-- $(1, 3)$ for example, represents a point located one unit to the right and three units above the origin. -->
+<!-- Instead of creating these points manually, one would commonly read-in data with functions such as `read_csv()` from the **tidyverse** or `read_sf()` from the **sf** package (see Chapter \@ref(read-write)). -->
+<!-- To generate new data (e.g., for testing), one can use the command `c()` (think of 'c' for 'combine'), as illustrated -->
+<!-- below:^[Other methods for generating numbers include with the `seq()` function (short for 'sequence') for generating regular sequences or `runif()`, `rnorm()` and other functions generating random numbers following some kind of probability distribution. -->
+<!-- The **mapedit** package can be used to create spatial data manually on an interactive map. -->
+<!-- ] -->
+
+<!-- ```{r} -->
+<!-- p = c(1, 3) -->
+<!-- ``` -->
+
+<!-- Now this can be plotted in Cartesian space, as illustrated in figure \@ref(fig:cartesian): -->
+
+<!-- ```{r cartesian, fig.cap="Illustration of vector point data in base R."} -->
+<!-- plot(x = p[1], y = p[2], xlim =  c(0, 5), ylim = c(0, 5)) -->
+<!-- ``` -->
+
+<!-- ### An introduction to simple features {#intro-sf} -->
+
+### 简单要素介绍 {#intro-sf}
+
+<!-- Simple features is an [open standard](http://portal.opengeospatial.org/files/?artifact_id=25355) developed and endorsed by the Open Geospatial Consortium (OGC), a not-for-profit organization whose activities we will revisit in a later chapter (in Section \@ref(file-formats)).
+Simple Features is a hierarchical data model that represents a wide range of geometry types.
+Of 17 geometry types supported by the specification, only 7 are used in the vast majority of geographic research (see Figure \@ref(fig:sf-ogc));
+these core geometry types are fully supported by the R package **sf** [@pebesma_simple_2018].^[
+The full OGC standard includes rather exotic geometry types including 'surface' and 'curve' geometry types, which currently have limited application in real world applications.
+All 17 types can be represented with the **sf** package, although (as of summer 2018) plotting only works for the 'core 7'.
+] -->
+
+简单要素（Simple features）是由开放地理空间联盟（OGC）开发和支持的一种[开放标准](http://portal.opengeospatial.org/files/?artifact_id=25355)，OGC 是一个非营利组织，我们将在后面的章节（第 \@ref(file-formats) 节）中再次介绍它。简单要素是一种分层数据模型，可以表示各种几何类型。在规范中定义的 17 种几何类型中，只有 7 种在绝大多数地理研究中使用（参见图 \@ref(fig:sf-ogc)）；这些核心几何类型在 R 包 **sf** 有完整的支持 [@pebesma_simple_2018]。^[完整的 OGC 标准包括一些相当奇特的几何类型，包括“表面”和“曲线”几何类型，目前在实际场景中的应用有限。所有 17 种类型都可以用 **sf** 包表示，但（截至 2018 年夏季）只有核心的 7 种类型可以用于绘图。]
+
+
+
+<!-- Simple feature types fully supported by sf -->
+```{r sf-ogc, fig.cap="sf 包完整支持的简单要素类型。", out.width="60%", echo=FALSE}
+knitr::include_graphics("figures/sf-classes.png")
+```
+
+
+<!-- **sf** can represent all common vector geometry types (raster data classes are not supported by **sf**): points, lines, polygons and their respective 'multi' versions (which group together features of the same type into a single feature).
+**sf** also supports geometry collections, which can contain multiple geometry types in a single object.
+**sf** largely supersedes the **sp** ecosystem, which comprises **sp** [@R-sp], **rgdal** for data read/write [@R-rgdal] and **rgeos** for spatial operations [@R-rgeos].
+The package is well documented, as can be seen on its website and in 6 vignettes, which can be loaded as follows: -->
+
+**sf** 软件包可以表示所有常见的矢量几何类型（不支持栅格数据）：点、线、多边形及其各自的“multi”版本（将相同类型的要素组合成单个要素）。**sf** 还支持几何体集合（Geometry Collections），可以在单个对象中包含多个几何类型。**sf** 在很大程度上取代了 **sp** 生态系统，其中包括 **sp** [@R-sp]、用于数据读写的 **rgdal** [@R-rgdal] 和用于空间操作的 **rgeos** [@R-rgeos]。该软件包有很好的文档，可以在其网站和 6 个文档中看到，使用以下方式查看：
+
+```{r 02-spatial-data-6, eval=FALSE}
+vignette(package = "sf") # 查看可用示例
+vignette("sf1")          # an introduction to the package
+```
+
+```{r 02-spatial-data-7, eval=FALSE, echo=FALSE}
+vignette("sf1") # an introduction to the package
+vignette("sf2") # reading, writing and converting simple features
+vignette("sf3") # manipulating simple feature geometries
+vignette("sf4") # manipulating simple features
+vignette("sf5") # plotting simple features
+vignette("sf6") # miscellneous long-form documentation
+```
+
+<!-- As the first vignette explains, simple feature objects in R are stored in a data frame, with geographic data occupying a special column, usually named 'geom' or 'geometry'.
+We will use the `world` dataset provided by the **spData**, loaded at the beginning of this chapter (see [nowosad.github.io/spData](https://nowosad.github.io/spData/) for a list of datasets loaded by the package).
+`world` is a spatial object containing spatial and attribute columns, the names of which are returned by the function `names()` (the last column contains the geographic information): -->
+
+正如第一篇文档中所解释的那样，R 中的简单要素对象存储在数据框中，其中地理数据占据一个特殊的列，通常命名为 “geom” 或 “geometry”。我们将使用 **spData** 提供的`world`数据集，该数据集在本章开头已经加载了（有关软件包加载的数据集列表，请参见 nowosad.github.io/spData）。`world` 是一个空间对象，包含空间和属性列，函数`names()`返回列名（最后一列包含地理信息）：
+
+```{r 02-spatial-data-8}
+names(world)
+```
+
+<!-- The contents of this `geom` column give `sf` objects their spatial powers: `world$geom` is a '[list column](https://jennybc.github.io/purrr-tutorial/ls13_list-columns.html)' that contains all the coordinates of the country polygons.
+The **sf** package provides a `plot()` method for visualizing geographic data:
+the following command creates Figure \@ref(fig:world-all). -->
+
+`geom`列的值为`sf`对象赋予了空间能力：`world$geom` 是一个“[列表列](https://jennybc.github.io/purrr-tutorial/ls13_list-columns.html)”，其中包含所有国家边界的多边形坐标。**sf** 包提供了一个 `plot()` 方法，用于可视化地理数据：下面的命令创建了图 \@ref(fig:world-all)。
+
+
+<!-- A spatial plot of the world using the sf package, with a facet for each attribute. -->
+
+```{r world-all, fig.cap="使用 sf 包绘制的世界地图，每个属性都有一个子图。", warning=FALSE, fig.scap="A spatial plot of the world using the sf package."}
+plot(world)
+```
+
+<!-- Note that instead of creating a single map, as most GIS programs would, the `plot()` command has created multiple maps, one for each variable in the `world` datasets.
+This behavior can be useful for exploring the spatial distribution of different variables and is discussed further in Section \@ref(basic-map) below. -->
+
+请注意，`plot()`命令创建了多个地图，而不是像大多数 GIS 程序那样创建单个地图，每个地图对应`world`数据集中的一个变量。这种模式对于探索不同变量的空间分布非常有用，下面的第 \@ref(basic-map) 节将进一步讨论这一点。
+
+<!-- Being able to treat spatial objects as regular data frames with spatial powers has many advantages, especially if you are already used to working with data frames.
+The commonly used `summary()` function, for example, provides a useful overview of the variables within the `world` object. -->
+
+将空间对象视为具有空间能力的常规数据框具有许多优点，尤其是在你已经习惯于使用数据框的情况下。例如，常用的`summary()`函数提供了`world`对象中变量的概述。
+
+```{r 02-spatial-data-9}
+summary(world["lifeExp"])
+```
+
+<!-- Although we have only selected one variable for the `summary` command, it also outputs a report on the geometry.
+This demonstrates the 'sticky' behavior of the geometry columns of **sf** objects, meaning the geometry is kept unless the user deliberately removes them, as we'll see in Section \@ref(vector-attribute-manipulation).
+The result provides a quick summary of both the non-spatial and spatial data contained in `world`: the mean average life expectancy is 71 years (ranging from less than 51 to more than 83 years with a median of 73 years) across all countries. -->
+
+虽然我们运行`summary`命令时只选择了一个变量，但它也输出了有关几何信息的报告。这展示了 **sf** 对象的几何列的“粘性”行为，这意味着除非用户有意删除它们，否则几何信息将被保留，正如我们将在第 \@ref(vector-attribute-manipulation) 节中看到的那样。返回结果中提供了有关`world`中包含的非空间数据和空间数据的摘要信息：所有国家的平均预期寿命为 71 岁（最低的不到 51 岁，最高的超过 83 岁，中位数为 73 岁）。
+
+```{block2 02-spatial-data-10, type='rmdnote'}
+<!-- The word `MULTIPOLYGON` in the summary output above refers to the geometry type of features (countries) in the `world` object.
+This representation is necessary for countries with islands such as Indonesia and Greece.
+Other geometry types are described in Section \@ref(geometry). -->
+
+在`world`对象中，要素的几何类型为`MULTIPOLYGON`，这种表示方法对于具有岛屿的国家（如印度尼西亚和希腊）是必要的。其他几何类型会在第 \@ref(geometry) 节中描述。
+```
+
+<!-- It is worth taking a deeper look at the basic behavior and contents of this simple feature object, which can usefully be thought of as a '**s**patial data **f**rame'. -->
+
+`sf`对象的基本操作和内在元素值得深入研究，它可以被视为一个空间数据框（“**s**patial data **f**rame”）。
+
+<!-- `sf` objects are easy to subset.
+The code below shows its first two rows and three columns.
+The output shows two major differences compared with a regular `data.frame`: the inclusion of additional geographic data (`geometry type`, `dimension`, `bbox` and CRS information - `epsg (SRID)`, `proj4string`), and the presence of a `geometry` column, here named `geom`: -->
+
+`sf`对象很容易进行子集操作。下面的代码显示了其前两行和前三列。与常规的`data.frame`相比，输出显示了两个主要的区别：包含了额外的地理数据（`geometry type`、`dimension`、`bbox`和 CRS 信息 - `epsg (SRID)`、`proj4string`），以及存在一个名为`geom`的`geometry`列：
+
+```{r 02-spatial-data-11}
+world_mini = world[1:2, 1:3]
+world_mini
+```
+
+<!-- All this may seem rather complex, especially for a class system that is supposed to be simple.
+However, there are good reasons for organizing things this way and using **sf**. -->
+
+所有这些可能看起来相当复杂，特别是对于一个想象中很简单的类系统。不过，用 **sf** 包的这种设计方式是事出有因的。
+
+<!-- Before describing each geometry type that the **sf** package supports, it is worth taking a step back to understand the building blocks of `sf` objects. 
+Section \@ref(sf) shows how simple features objects are data frames, with special geometry columns.
+These spatial columns are often called `geom` or `geometry`: `world$geom` refers to the spatial element of the `world` object described above.
+These geometry columns are 'list columns' of class `sfc` (see Section \@ref(sfc)).
+In turn, `sfc` objects are composed of one or more objects of class `sfg`: simple feature geometries that we describe in Section \@ref(sfg). -->
+
+在描述 **sf** 包支持的每种几何类型之前，有必要退一步了解`sf`对象的组成部分。第 \@ref(sf) 节展示了简单要素对象是数据框，具有特殊的几何列。这些空间列通常称为`geom`或`geometry`：`world$geom`是上面描述的`world`对象的空间元素。这些几何列是`sfc`类（请参见第 \@ref(sfc) 节）的“列表列”。`sfc`对象又由一个或多个`sfg`类对象组成，`sfg`是指简单要素几何(Simple Feature Geometries)，我们将在第 \@ref(sfg) 节中介绍。
+
+
+<!-- To understand how the spatial components of simple features work, it is vital to understand simple feature geometries.
+For this reason we cover each currently supported simple features geometry type in Section \@ref(geometry) before moving on to describe how these can be represented in R using `sfg` objects, which form the basis of `sfc` and eventually full `sf` objects. -->
+
+为了理解简单要素的空间组件是如何工作的，了解简单要素几何是至关重要的。因此，在第 \@ref(geometry) 节中，我们介绍了目前支持的每种简单要素几何类型，然后再描述如何使用 `sfg` 对象在 R 中表示这些几何类型，这些对象构成了 `sfc` 和最终的完整 `sf` 对象的基础。
+
+```{block2 assignment, type='rmdnote'}
+<!-- The preceding code chunk uses `=` to create a new object called `world_mini` in the command `world_mini = world[1:2, 1:3]`.
+This is called assignment.
+An equivalent command to achieve the same result is `world_mini <- world[1:2, 1:3]`.
+Although 'arrow assigment' is more commonly used, we use 'equals assignment' because it's slightly faster to type and easier to teach due to compatibility with commonly used languages such as Python and JavaScript.
+Which to use is largely a matter of preference as long as you're consistent (packages such as **styler** can be used to change style). -->
+
+上面的代码块中使用`=`运算符创建一个名为`world_mini`的新对象，这被称为赋值。为了达到相同的结果，可以使用等价的命令`world_mini <- world[1:2, 1:3]`。虽然“箭头赋值”更常用，但我们使用“等于赋值”，因为它打起来更快，而且它与常用的语言（如 Python 和 JavaScript）的赋值兼容，所以更易于教授。使用哪种方式主要是个人喜好，只要保持一致即可（可以使用 **styler** 等软件包来更改样式）。
+```
+
+<!-- ### Why simple features? -->
+### 为什么使用简单要素？{#why-simple-features}
+
+<!-- Simple features is a widely supported data model that underlies data structures in many GIS applications including QGIS and PostGIS.
+A major advantage of this is that using the data model ensures your work is cross-transferable to other set-ups, for example importing from and exporting to spatial databases. -->
+
+简单要素是一种广泛支持的数据模型，它是许多 GIS 应用程序（包括 QGIS 和 PostGIS）中数据结构的基础。这样设计的一个主要优点是，使用简单要素可以让你的数据方便地在各个 GIS 应用程序之间进行交叉传输，例如从空间数据库导入和导出。
+
+<!-- 
+A more specific question from an R perspective is "why use the **sf** package when **sp** is already tried and tested"?
+There are many reasons (linked to the advantages of the simple features model) including: -->
+
+从 R 的角度来看，一个更具体的问题是“**sp** 包已经经过了测试和验证，为什么还要使用 **sf** 包”？原因有很多（与简单要素模型的优势相关），包括：
+
+<!-- - Fast reading and writing of data.
+- Enhanced plotting performance.
+- **sf** objects can be treated as data frames in most operations.
+- **sf** functions can be combined using `%>%` operator and works well with the [tidyverse](http://tidyverse.org/) collection of R packages.
+- **sf** function names are relatively consistent and intuitive (all begin with `st_`). -->
+
+
+- 快速读写数据。
+- 提高绘图性能。
+- **sf** 对象在大多数操作中可以被当做数据框。
+- **sf** 函数可以使用`%>%`运算符组合，并且可以与 R 的`tidyverse`系列的包配合使用。
+- **sf** 函数名称相对一致且直观（所有函数都以 `st_` 开头）。
+
+<!-- Due to such advantages, some spatial packages (including **tmap**, **mapview** and **tidycensus**) have added support for **sf**.
+However, it will take many years for most packages to transition and some will never switch.
+Fortunately, these can still be used in a workflow based on `sf` objects, by converting them to the `Spatial` class used in **sp**:  -->
+
+由于这些优势，一些空间包（包括 **tmap**、**mapview** 和 **tidycensus**）已经添加了对 **sf** 的支持。然而，大多数包要经过多年才能过渡到 **sf**，有些甚至永远不会支持。幸运的是，通过将它们转换为 **sp** 中使用的`Spatial`类，这些包仍然可以在基于`sf`对象的工作流中使用：
+
+```{r 02-spatial-data-12, eval=FALSE}
+library(sp)
+world_sp = as(world, Class = "Spatial")
+# sp functions ...
+```
+
+<!-- `Spatial` objects can be converted back to `sf` in the same way or with `st_as_sf()`: -->
+
+`Spatial`对象可以通过相同的方式或使用`st_as_sf()`转换成`sf`对象：
+```{r 02-spatial-data-13, eval=FALSE}
+world_sf = st_as_sf(world_sp, "sf")
+```
+
+<!-- ### Basic map making {#basic-map} -->
+### 基本地图制作 {#basic-map}
+
+<!-- 
+Basic maps are created in **sf** with `plot()`.
+By default this creates a multi-panel plot (like **sp**'s `spplot()`), one sub-plot for each variable of the object, as illustrated in the left-hand panel in Figure \@ref(fig:sfplot).
+A legend or 'key' with a continuous color is produced if the object to be plotted has a single variable (see the right-hand panel).
+Colors can also be set with `col = `, although this will not create a continuous palette or a legend.  -->
+
+在 **sf** 中，可以使用`plot()`创建基本地图。默认情况下，这会创建一个多面板图（类似于 **sp** 的`spplot()`），每个子图都对应对象的一个变量，如图 \@ref(fig:sfplot) 左侧面板所示。如果要绘制的对象只有一个变量，则会生成带有连续颜色的图例，如右侧面板所示。可以使用`col =`设置颜色，但这不会创建连续的调色板或图例。
+
+<!-- Plotting with sf, with multiple variables (left) and a single variable (right). -->
+
+```{r sfplot, fig.cap="使用 sf 绘图，多变量（左）和单变量（右）。", out.width="49%", fig.show='hold', warning=FALSE, fig.scap="Plotting with sf."}
+plot(world[3:6])
+plot(world["pop"])
+```
+
+<!-- Plots are added as layers to existing images by setting `add = TRUE`.^[
+`plot()`ing of **sf** objects uses `sf:::plot.sf()` behind the scenes.
+`plot()` is a generic method that behaves differently depending on the class of object being plotted.
+]
+To demonstrate this, and to provide a taster of content covered in Chapters \@ref(attr) and \@ref(spatial-operations) on attribute and spatial data operations, the subsequent code chunk combines countries in Asia: -->
+
+通过设置`add = TRUE`，可以将绘图结果添加为现有图像的图层。^[
+对 **sf** 对象调用`plot()`函数，在幕后会使用`sf:::plot.sf()`函数进行操作。
+`plot()`是一个通用方法，其行为取决于正在绘制的对象的类。
+]接下来的代码块把亚洲国家组合在一起，演示了图层叠加，而且预告了第 \@ref(attr) 和 \@ref(spatial-operations) 章中属性和空间数据操作的内容： 
+```{r 02-spatial-data-14, warning=FALSE}
+world_asia = world[world$continent == "Asia", ]
+asia = st_union(world_asia)
+```
+
+<!-- We can now plot the Asian continent over a map of the world.
+Note that the first plot must only have one facet for `add = TRUE` to work.
+If the first plot has a key, `reset = FALSE` must be used (result not shown): -->
+
+我们现在可以在世界地图上绘制亚洲大陆。请注意，第一个图必须只有一个面板，才能使用`add = TRUE`。如果第一个图有一个图例，则必须使用`reset = FALSE`（以下代码的绘图结果未展示，读者可自行尝试）：
+
+```{r asia, out.width='50%', fig.cap="A plot of Asia added as a layer on top of countries worldwide.", eval=FALSE}
+plot(world["pop"], reset = FALSE)
+plot(asia, add = TRUE, col = "red")
+```
+
+<!-- Adding layers in this way can be used to verify the geographic correspondence between layers: 
+the `plot()` function is fast to execute and requires few lines of code, but does not create interactive maps with a wide range of options.
+For more advanced map making we recommend using dedicated visualization packages such as **tmap** (see Chapter \@ref(adv-map)). -->
+
+通过这种方式添加图层可以用于验证图层之间的地理对应关系：`plot()`函数执行速度快，代码行数少，但不能创建具有广泛互动选项的交互式地图。对于更高级的地图制作，我们建议使用专用的可视化包，如 **tmap**（请参见第 \@ref(adv-map) 章）。 
+
+<!-- ### Base plot arguments {#base-args} -->
+### 基本绘图参数 {#base-args}
+
+<!-- There are various ways to modify maps with **sf**'s `plot()` method.
+Because **sf** extends base R plotting methods `plot()`'s arguments such as `main =` (which specifies the title of the map) work with `sf` objects (see `?graphics::plot` and `?par`).^[
+Note: many plot arguments are ignored in facet maps, when more than one `sf` column is plotted.
+] -->
+
+使用 **sf** 的`plot()`方法可以以多种方式修改地图。由于 **sf** 扩展了 R 的基础绘图方法，因此`plot()`的参数（例如`main =`，用于指定地图的标题）也适用于`sf`对象（请参见`?graphics::plot`和`?par`）。^[
+注意：当绘制多个`sf`列时，许多绘图参数在面板地图中会被忽略。
+]
+
+```{r 02-spatial-data-15, echo=FALSE, eval=FALSE}
+# aim: show main
+plot(world$geom, main = "sf plot() method")
+```
+
+<!-- Figure \@ref(fig:contpop) illustrates this flexibility by overlaying circles, whose diameters (set with `cex =`) represent country populations, on a map of the world.
+A basic version of the map can be created with the following commands (see exercises at the end of this chapter and the script [`02-contplot.R`](https://github.com/Robinlovelace/geocompr/blob/master/code/02-contpop.R) to create Figure \@ref(fig:contpop)): -->
+
+图 \@ref(fig:contpop) 展示 **sf** 绘图的灵活性，它在世界地图上叠加了一个圆形图层，圆的直径表示国家人口（使用`cex =`设置直径）。
+可以使用以下命令创建基本的地图（请参见本章末尾的练习和脚本[`02-contplot.R`](https://github.com/Robinlovelace/geocompr/blob/master/code/02-contpop.R)创建图 \@ref(fig:contpop)）：
+
+```{r 02-spatial-data-16, eval=FALSE}
+plot(world["continent"], reset = FALSE)
+cex = sqrt(world$pop) / 10000
+world_cents = st_centroid(world, of_largest = TRUE)
+plot(st_geometry(world_cents), add = TRUE, cex = cex)
+```
+
+<!-- Country continents (represented by fill color) and 2015 populations (represented by circles, with area proportional to population). -->
+
+```{r contpop, fig.cap="各国所属的洲（用填充色表示）和 2015 年的人口数量（用圆圈表示，圆圈的面积与人口数量成正比）。", echo=FALSE, warning=FALSE, fig.scap="Country continents and 2015 populations."}
+source("code/02-contpop.R")
+```
+
+<!-- The code above uses the function `st_centroid()` to convert one geometry type (polygons) to another (points) (see Chapter \@ref(geometric-operations)), the aesthetics of which are varied with the `cex` argument. -->
+
+上面的代码使用函数`st_centroid()`将一个几何类型（多边形）转换为另一个几何类型（点）（请参见第 \@ref(geometric-operations) 章），并使用`cex`参数来设置其大小。 
+
+<!-- **sf**'s plot method also has arguments specific to geographic data. `expandBB`, for example, can be used plot an `sf` object in context:
+it takes a numeric vector of length four that expands the bounding box of the plot relative to zero in the following order: bottom, left, top, right.
+This is used to plot India in the context of its giant Asian neighbors, with an emphasis on China to the east, in the following code chunk, which generates Figure \@ref(fig:china) (see exercises below on adding text to plots): -->
+
+**sf** 的`plot()`方法也有只适用于地理数据的特定参数。例如，`expandBB`可以用于调整画布中`sf`对象的边界：它接受一个长度为四的百分比数值向量，按以下顺序扩展绘图的边界框：底部、左侧、顶部、右侧。下面的代码块使用`expandBB`将印度绘制在以整个亚洲为边界的画布中，东部的中国也被重点标记出来，生成图 \@ref(fig:china)（请参见下面的练习，了解如何在图中添加文本）： 
+
+```{r 02-spatial-data-17, eval=FALSE}
+india = world[world$name_long == "India", ]
+plot(st_geometry(india), expandBB = c(0, 0.2, 0.1, 1), col = "gray", lwd = 3)
+plot(world_asia[0], add = TRUE)
+```
+
+<!-- India in context, demonstrating the expandBB argument -->
+
+
+```{r china, fig.cap="亚洲中的印度，演示 expandBB 参数的用法。", warning=FALSE, echo=FALSE, out.width="50%"}
+old_par = par(mar = rep(0, 4))
+india = world[world$name_long == "India", ]
+indchi = world_asia[grepl("Indi|Chi", world_asia$name_long), ]
+indchi_points = st_centroid(indchi)
+indchi_coords = st_coordinates(indchi_points)
+plot(st_geometry(india), expandBB = c(-0.2, 0.5, 0, 1), col = "gray", lwd = 3)
+plot(world_asia[0], add = TRUE)
+text(indchi_coords[, 1], indchi_coords[, 2], indchi$name_long)
+par(old_par)
+```
+
+<!-- Note the use of `[0]` to keep only the geometry column and `lwd` to emphasize India.
+See Section \@ref(other-mapping-packages) for other visualization techniques for representing a range of geometry types, the subject of the next section. -->
+
+注意，代码中使用`[0]`仅保留几何列，设置`lwd`来强调印度。请参见第 \@ref(other-mapping-packages) 节，了解表示各种几何类型的其他可视化技术。各种几何类型的介绍是下一节的主题。 
+
+<!-- ### Geometry types {#geometry} -->
+### 几何类型 {#geometry}
+
+<!-- Geometries are the basic building blocks of simple features.
+Simple features in R can take on one of the 17 geometry types supported by the **sf** package.
+In this chapter we will focus on the seven most commonly used types: `POINT`, `LINESTRING`, `POLYGON`, `MULTIPOINT`, `MULTILINESTRING`, `MULTIPOLYGON` and `GEOMETRYCOLLECTION`.<!--FIG-->
+<!--
+Find the whole list of possible feature types in [the PostGIS manual ](http://postgis.net/docs/using_postgis_dbmanagement.html). -->
+
+几何类型是简单要素的基本组成部分。在 R 中，简单要素可以采用 **sf** 包支持的 17 种几何类型之一。在本章中，我们将重点介绍七种最常用的类型：`POINT`、`LINESTRING`、`POLYGON`、`MULTIPOINT`、`MULTILINESTRING`、`MULTIPOLYGON`和`GEOMETRYCOLLECTION`。
+可以在 [PostGIS 手册](http://postgis.net/docs/using_postgis_dbmanagement.html) 中找到所有可能的要素类型列表。 
+
+<!-- Generally, well-known binary (WKB) or well-known text (WKT) are the standard encoding for simple feature geometries.
+WKB representations are usually hexadecimal strings easily readable for computers.
+This is why GIS and spatial databases use WKB to transfer and store geometry objects.
+WKT, on the other hand, is a human-readable text markup description of simple features. 
+Both formats are exchangeable, and if we present one, we will naturally choose the WKT representation. -->
+
+通常，简单要素几何体的标准编码是 well-known binary (WKB) 或 well-known text (WKT)。WKB 表示通常是十六进制字符串，容易被计算机读取。这就是为什么 GIS 和空间数据库使用 WKB 来传输和存储几何对象的原因。另一方面，WKT 是简单要素的人类可读的文本标记描述。两种格式是可以互相转换的，如果要展示其中一种，我们自然会选择人类可读的 WKT 表示。 
+
+<!-- The basis for each geometry type is the point. 
+A point is simply a coordinate in 2D, 3D or 4D space (see `vignette("sf1")` for more information) such as (see left panel in Figure \@ref(fig:sfcs)): -->
+
+每种几何类型的基础是点（POINT）。点是二维、三维或四维空间中的坐标（有关更多信息，请参见 `vignette("sf1")`），例如（请参见图 \@ref(fig:sfcs) 中的左侧面板）： 
+
+- `POINT (5 2)`
+
+<!-- A linestring is a sequence of points with a straight line connecting the points, for example (see middle panel in Figure \@ref(fig:sfcs)): -->
+
+线（LINESTRING）是一系列通过直线相连的点，例如（请参见图 \@ref(fig:sfcs) 中的中间面板）： 
+
+- `LINESTRING (1 5, 4 4, 4 1, 2 2, 3 2)`
+
+<!-- A polygon is a sequence of points that form a closed, non-intersecting ring.
+Closed means that the first and the last point of a polygon have the same coordinates (see right panel in Figure \@ref(fig:sfcs)).^[
+By definition, a polygon has one exterior boundary (outer ring) and can have zero or more interior boundaries (inner rings), also known as holes.
+A polygon with a hole would be, for example, `POLYGON ((1 5, 2 2, 4 1, 4 4, 1 5), (2 4, 3 4, 3 3, 2 3, 2 4))`
+] -->
+
+多边形（POLYGON）是一系列点形成的一个封闭的、不相交的环。封闭意味着多边形的第一个和最后一个点有相同的坐标（参见图 \@ref(fig:sfcs) 中的右侧面板）^[
+根据定义，多边形有一个外边界（外环），可以有零个或多个内边界（内环），也称为孔。
+带有孔的多边形可以是 `POLYGON ((1 5, 2 2, 4 1, 4 4, 1 5), (2 4, 3 4, 3 3, 2 3, 2 4))` 这样的形式。
+]。
+
+- 没有内环的多边形 : `POLYGON ((1 5, 2 2, 4 1, 4 4, 1 5))`
+
+```{r sfcs, echo=FALSE, fig.cap="点，线，多边形的示例。"}
+# Illustration of point, linestring and polygon geometries.
+old_par = par(mfrow = c(1, 3), pty = "s", mar = c(0, 3, 1, 0))
+plot(st_as_sfc(c("POINT(5 2)")), axes = TRUE, main = "POINT")
+plot(st_as_sfc("LINESTRING(1 5, 4 4, 4 1, 2 2, 3 2)"), axes = TRUE, main = "LINESTRING")
+plot(st_as_sfc("POLYGON((1 5, 2 2, 4 1, 4 4, 1 5))"), col="gray", axes = TRUE, main = "POLYGON")
+par(old_par)
+```
+
+
+```{r polygon_hole, echo=FALSE, out.width="30%", eval=FALSE}
+# not printed - enough of these figures already (RL)
+par(pty = "s")
+plot(st_as_sfc("POLYGON((1 5, 2 2, 4 1, 4 4, 1 5), (2 4, 3 4, 3 3, 2 3, 2 4))"), col = "gray", axes = TRUE, main = "POLYGON with a hole")
+```
+
+<!-- So far we have created geometries with only one geometric entity per feature.
+However, **sf** also allows multiple geometries to exist within a single feature (hence the term 'geometry collection') using "multi" version of each geometry type: -->
+
+到目前为止，我们已经创建了每个要素中只有一个几何实体的几何体。然而，**sf** 也允许单个要素中存在多个几何体（因此称为“几何体集合”），比如使用每种几何类型的“多（multi）”版本：
+
+- 多点（MULTIPOINT）: `MULTIPOINT (5 2, 1 3, 3 4, 3 2)`
+- 多线（MULTILINESTRING）: `MULTILINESTRING ((1 5, 4 4, 4 1, 2 2, 3 2), (1 2, 2 4))`
+- 多面（MULTIPOLYGON）: `MULTIPOLYGON (((1 5, 2 2, 4 1, 4 4, 1 5), (0 2, 1 2, 1 3, 0 3, 0 2)))`
+
+```{r multis, echo=FALSE, fig.cap="多点，多线，多面的示例。"}
+# Illustration of multi* geometries.
+old_par = par(mfrow = c(1, 3), pty = "s", mar = c(0, 3, 1, 0))
+plot(st_as_sfc("MULTIPOINT (5 2, 1 3, 3 4, 3 2)"), axes = TRUE, main = "MULTIPOINT")
+plot(st_as_sfc("MULTILINESTRING ((1 5, 4 4, 4 1, 2 2, 3 2), (1 2, 2 4))"), axes = TRUE, main = "MULTILINESTRING")
+plot(st_as_sfc("MULTIPOLYGON (((1 5, 2 2, 4 1, 4 4, 1 5), (0 2, 1 2, 1 3, 0 3, 0 2)))"), col = "gray", axes = TRUE, main = "MULTIPOLYGON")
+par(old_par)
+```
+
+<!-- Finally, a geometry collection can contain any combination of geometries including (multi)points and linestrings (see Figure \@ref(fig:geomcollection)): -->
+
+最后，几何体集合可以包含任何几何体的组合，包括（多）点和线（请参见图 \@ref(fig:geomcollection)）： 
+
+- 几何体集合（GEOMETRYCOLLECTION）: `GEOMETRYCOLLECTION (MULTIPOINT (5 2, 1 3, 3 4, 3 2), LINESTRING (1 5, 4 4, 4 1, 2 2, 3 2))`
+
+```{r geomcollection, echo=FALSE, fig.asp=1, fig.cap="几何体集合的示例。", out.width="33%"}
+# Illustration of a geometry collection.
+# Plotted - it is referenced in ch5 (st_cast)
+old_par = par(pty = "s", mar = c(2, 3, 3, 0))
+plot(st_as_sfc("GEOMETRYCOLLECTION (MULTIPOINT (5 2, 1 3, 3 4, 3 2), LINESTRING (1 5, 4 4, 4 1, 2 2, 3 2))"),
+     axes = TRUE, main = "GEOMETRYCOLLECTION", col = 1)
+par(old_par)
+```
+
+<!-- ### Simple feature geometries (sfg) {#sfg} -->
+### 简单要素几何（sfg） {#sfg}
+
+<!-- The `sfg` class represents the different simple feature geometry types in R: point, linestring, polygon (and their 'multi' equivalents, such as multipoints) or geometry collection. -->
+
+`sfg`类在 R 中表示不同的简单要素几何类型：点、线、多边形（以及多点、多线等）或几何体集合。
+
+<!-- Usually you are spared the tedious task of creating geometries on your own since you can simply import an already existing spatial file.
+However, there are a set of functions to create simple feature geometry objects (`sfg`) from scratch if needed.
+The names of these functions are simple and consistent, as they all start with the `st_`  prefix and end with the name of the geometry type in lowercase letters: -->
+
+通常情况下，你不需要自己创建几何体，因为可以直接导入已有的空间文件。但如果需要的话，你可以使用一组函数从头创建简单要素几何对象（`sfg`）。这些函数的名称简单且一致，它们都以`st_`前缀开头，以小写字母的几何类型名称结尾： 
+
+<!-- - A point: `st_point()`
+- A linestring: `st_linestring()`
+- A polygon: `st_polygon()`
+- A multipoint: `st_multipoint()`
+- A multilinestring: `st_multilinestring()`
+- A multipolygon: `st_multipolygon()`
+- A geometry collection: `st_geometrycollection()` -->
+
+- 一个点（POINT）：`st_point()`
+- 一个线（LINESTRING）：`st_linestring()`
+- 一个多边形（POLYGON）：`st_polygon()`
+- 多点（MULTIPOINT）：`st_multipoint()`
+- 多线（MULTILINESTRING）：`st_multilinestring()`
+- 多面（MULTIPOLYGON）：`st_multipolygon()`
+- 几何体集合（GEOMETRYCOLLECTION）：`st_geometrycollection()`
+
+<!-- `sfg` objects can be created from three base R data types:
+
+1. A numeric vector: a single point
+2. A matrix: a set of points, where each row represents a point, a multipoint or linestring
+3. A list: a collection of objects such as matrices, multilinestrings or geometry collections
+
+The function `st_point()` creates single points from numeric vectors: -->
+
+`sfg`对象可以从三种基本 R 数据类型创建：
+
+1. 数值向量：单个点
+2. 矩阵：一组点，其中每行表示一个点、多点或线
+3. 列表：对象的集合，例如矩阵、多线或几何体集合
+
+函数`st_point()`接收数值向量返回单个点： 
+
+```{r 02-spatial-data-18}
+st_point(c(5, 2))                 # XY point
+st_point(c(5, 2, 3))              # XYZ point
+st_point(c(5, 2, 1), dim = "XYM") # XYM point
+st_point(c(5, 2, 3, 1))           # XYZM point
+```
+
+<!-- The results show that XY (2D coordinates), XYZ (3D coordinates) and XYZM (3D with an additional variable, typically measurement accuracy) point types are created from vectors of length 2, 3, and 4, respectively. 
+The XYM type must be specified using the `dim` argument (which is short for dimension).
+
+By contrast, use matrices in the case of multipoint (`st_multipoint()`) and linestring (`st_linestring()`) objects: -->
+结果显示，XY（2D 坐标）、XYZ（3D 坐标）和 XYZM（3D 坐标加一个额外的变量，通常是测量精度）点类型分别从长度为 2、3 和 4 的向量创建。XYM 类型必须使用`dim`参数（即维度）指定。
+
+相比之下，创建多点（`st_multipoint()`）和线（`st_linestring()`）对象时应该使用矩阵： 
+
+```{r 02-spatial-data-19}
+# 函数 rbind 简化了矩阵的创建
+## 多点
+multipoint_matrix = rbind(c(5, 2), c(1, 3), c(3, 4), c(3, 2))
+st_multipoint(multipoint_matrix)
+## 线
+linestring_matrix = rbind(c(1, 5), c(4, 4), c(4, 1), c(2, 2), c(3, 2))
+st_linestring(linestring_matrix)
+```
+
+<!-- Finally, use lists for the creation of multilinestrings, (multi-)polygons and geometry collections: -->
+最后，使用列表来创建多线、多面和几何体集合： 
+
+```{r 02-spatial-data-20}
+## 多边形
+polygon_list = list(rbind(c(1, 5), c(2, 2), c(4, 1), c(4, 4), c(1, 5)))
+st_polygon(polygon_list)
+```
+
+```{r 02-spatial-data-21}
+## 有内环的多边形
+polygon_border = rbind(c(1, 5), c(2, 2), c(4, 1), c(4, 4), c(1, 5))
+polygon_hole = rbind(c(2, 4), c(3, 4), c(3, 3), c(2, 3), c(2, 4))
+polygon_with_hole_list = list(polygon_border, polygon_hole)
+st_polygon(polygon_with_hole_list)
+```
+
+```{r 02-spatial-data-22}
+## 多线
+multilinestring_list = list(rbind(c(1, 5), c(4, 4), c(4, 1), c(2, 2), c(3, 2)), 
+                            rbind(c(1, 2), c(2, 4)))
+st_multilinestring((multilinestring_list))
+```
+
+```{r 02-spatial-data-23}
+## 多面
+multipolygon_list = list(list(rbind(c(1, 5), c(2, 2), c(4, 1), c(4, 4), c(1, 5))),
+                         list(rbind(c(0, 2), c(1, 2), c(1, 3), c(0, 3), c(0, 2))))
+st_multipolygon(multipolygon_list)
+```
+
+```{r 02-spatial-data-24, eval=FALSE}
+## 几何体集合
+gemetrycollection_list = list(st_multipoint(multipoint_matrix),
+                              st_linestring(linestring_matrix))
+st_geometrycollection(gemetrycollection_list)
+#> GEOMETRYCOLLECTION (MULTIPOINT (5 2, 1 3, 3 4, 3 2),
+#>   LINESTRING (1 5, 4 4, 4 1, 2 2, 3 2))
+```
+
+<!-- table -->
+<!-- figure - image/fig1.jpg -->
+<!-- they are interconnected - points could create mulitpoints or lines; -->
+<!-- lines could create mutlilines or polygons, etc. -->
+<!-- https://r-spatial.github.io/sf/articles/sf1.html -->
+
+<!-- ### Simple feature columns (sfc) {#sfc} -->
+### 简单要素列（sfc）{#sfc}
+
+<!-- One `sfg` object contains only a single simple feature geometry. 
+A simple feature geometry column (`sfc`) is a list of `sfg` objects, which is additionally able to contain information about the coordinate reference system in use.
+For instance, to combine two simple features into one object with two features, we can use the `st_sfc()` function. 
+This is important since `sfc` represents the geometry column in **sf** data frames: -->
+
+一个`sfg`对象只包含单个简单要素几何体。一个简单要素几何列（`sfc`）是一个`sfg`对象的列表，它还能够包含坐标参考系的信息。例如，要将两个简单要素组合成一个具有两个要素的对象，可以使用`st_sfc()`函数。注意，`sfc`对象其实就是 **sf** 数据框中的几何列： 
+
+```{r 02-spatial-data-25}
+# sfc POINT
+point1 = st_point(c(5, 2))
+point2 = st_point(c(1, 3))
+points_sfc = st_sfc(point1, point2)
+points_sfc
+```
+
+<!-- In most cases, an `sfc` object contains objects of the same geometry type.
+Therefore, when we convert `sfg` objects of type polygon into a simple feature geometry column, we would also end up with an `sfc` object of type polygon, which can be verified with `st_geometry_type()`. 
+Equally, a geometry column of multilinestrings would result in an `sfc` object of type multilinestring: -->
+
+在大多数情况下，`sfc`对象包含相同几何类型的对象。因此，当我们将类型为多边形的`sfg`对象转换为简单要素几何列时，我们也会得到一个类型为多边形的`sfc`对象，可以使用`st_geometry_type()`进行验证。同样，多线的几何列将生成类型为多线的`sfc`对象： 
+
+```{r 02-spatial-data-26}
+# sfc POLYGON
+polygon_list1 = list(rbind(c(1, 5), c(2, 2), c(4, 1), c(4, 4), c(1, 5)))
+polygon1 = st_polygon(polygon_list1)
+polygon_list2 = list(rbind(c(0, 2), c(1, 2), c(1, 3), c(0, 3), c(0, 2)))
+polygon2 = st_polygon(polygon_list2)
+polygon_sfc = st_sfc(polygon1, polygon2)
+st_geometry_type(polygon_sfc)
+```
+
+```{r 02-spatial-data-27}
+# sfc MULTILINESTRING
+multilinestring_list1 = list(rbind(c(1, 5), c(4, 4), c(4, 1), c(2, 2), c(3, 2)), 
+                            rbind(c(1, 2), c(2, 4)))
+multilinestring1 = st_multilinestring((multilinestring_list1))
+multilinestring_list2 = list(rbind(c(2, 9), c(7, 9), c(5, 6), c(4, 7), c(2, 7)), 
+                            rbind(c(1, 7), c(3, 8)))
+multilinestring2 = st_multilinestring((multilinestring_list2))
+multilinestring_sfc = st_sfc(multilinestring1, multilinestring2)
+st_geometry_type(multilinestring_sfc)
+```
+
+<!-- It is also possible to create an `sfc` object from `sfg` objects with different geometry types: -->
+
+还可以使用不同几何类型的`sfg`对象创建`sfc`对象： 
+
+```{r 02-spatial-data-28}
+# sfc GEOMETRY
+point_multilinestring_sfc = st_sfc(point1, multilinestring1)
+st_geometry_type(point_multilinestring_sfc)
+```
+
+<!-- if you want to use it - st_cast() to a proper geometry type -->
+<!-- or st_is to select only one geometry type -->
+<!-- http://r-spatial.org/r/2017/01/12/newssf.html -->
+<!-- methods(class = "sfc") -->
+
+<!-- As mentioned before, `sfc` objects can additionally store information on the coordinate reference systems (CRS). To specify a certain CRS, we can use the `epsg (SRID)` or `proj4string` attributes of an `sfc` object.
+The default value of `epsg (SRID)` and `proj4string` is `NA` (*Not Available*), as can be verified with `st_crs()`: -->
+
+如前所述，`sfc`对象可以额外存储有关坐标参考系统（CRS）的信息。要指定特定的 CRS，可以使用`sfc`对象的`epsg (SRID)`或`proj4string`属性。`epsg (SRID)`和`proj4string`的默认值为`NA`（*不可用*），可以使用`st_crs()`进行验证： 
+
+```{r 02-spatial-data-29}
+st_crs(points_sfc)
+```
+
+<!-- All geometries in an `sfc` object must have the same CRS.
+We can add coordinate reference system as a `crs` argument of `st_sfc()`. 
+This argument accepts an integer with the `epsg` code such as `4326`, which automatically adds the 'proj4string' (see Section \@ref(crs-intro)): -->
+
+`sfc`对象中的所有几何体必须具有相同的 CRS。我们可以将坐标参考系统作为`st_sfc()`函数的`crs`参数添加。该参数接受一个整数，例如`epsg`代码`4326`，它会自动添加'proj4string'（请参见第 \@ref(crs-intro) 节）： 
+
+```{r 02-spatial-data-30, echo=FALSE, results='hide'}
+# EPSG definition
+points_sfc_wgs = st_sfc(point1, point2, crs = 4326)
+st_crs(points_sfc_wgs)
+```
+
+```{r 02-spatial-data-30-echo, eval=FALSE}
+# EPSG 定义
+points_sfc_wgs = st_sfc(point1, point2, crs = 4326)
+st_crs(points_sfc_wgs)
+#> Coordinate Reference System:
+#> EPSG: 4326
+#> proj4string: ”+proj=longlat +datum=WGS84 +no_defs”
+```
+
+<!-- It also accepts a raw proj4string (result not shown): -->
+
+`st_sfc()`函数还可以接受一个 proj4string 作为参数（执行结果未展示，读者可自行尝试）：
+
+```{r 02-spatial-data-31, eval=FALSE}
+# PROJ4STRING 定义
+st_sfc(point1, point2, crs = "+proj=longlat +datum=WGS84 +no_defs")
+```
+
+<!-- For example, we can set the UTM Zone 11N projection with `epsg` code `2955`: -->
+
+<!-- ```{r, eval=FALSE} -->
+<!-- st_sfc(point1, point2, crs = 2955) -->
+<!-- #> ... -->
+<!-- #> epsg (SRID):    2955 -->
+<!-- #> proj4string:    +proj=utm +zone=11 +ellps=GRS80 ... +units=m +no_defs -->
+<!-- #> POINT (5 2) -->
+<!-- #> POINT (1 3) -->
+<!-- ``` -->
+
+<!-- As you can see above, the `proj4string` definition was automatically added. -->
+<!-- The CRS can also be set with the full `proj4string` (result not shown): -->
+
+<!-- ```{r, eval=FALSE} -->
+<!-- p4s = "+proj=utm +zone=11 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs" -->
+<!-- st_sfc(point1, point2, crs = crs_utm) -->
+<!-- ``` -->
+
+```{block2 02-spatial-data-32, type='rmdnote'}
+<!-- Sometimes `st_crs()` will return a `proj4string` but not an `epsg` code. 
+This is because there is no general method to convert from `proj4string` to `epsg` (see Chapter \@ref(reproj-geo-data)). -->
+
+有时`st_crs()`会返回一个`proj4string`，但不会返回`epsg`代码。这是因为没有通用的方法可以从`proj4string`转换为`epsg`（请参见第 \@ref(reproj-geo-data) 章）。 
+```
+
+<!-- precision -->
+<!-- plots can be made -->
+
+<!-- ### The sf class {#sf} -->
+### sf 类 {#sf}
+
+<!-- Sections \@ref(geometry) to \@ref(sfc) deal with purely geometric objects, 'sf geometry' and 'sf column' objects, respectively.
+These are geographic building blocks of geographic vector data represented as simple features.
+The final building block is non-geographic attributes, representing the name of the feature or other attributes such as measured values, groups, and other things. -->
+
+第 \@ref(geometry) 到第 \@ref(sfc) 节介绍了纯几何对象、**sf** 几何对象和 **sf** 列对象，它们都是简单要素所表示的矢量数据的组件。最后一个组件是非地理属性，表示要素的名称或其他属性，例如测量值、分组等其他值。
+
+<!-- To illustrate attributes, we will represent a temperature of 25°C in London on June 21^st^, 2017.
+This example contains a geometry (the coordinates), and three attributes with three different classes (place name, temperature and date).^[
+Other attributes might include an urbanity category (city or village), or a remark if the measurement was made using an automatic station.
+]
+Objects of class `sf` represent such data by combining the attributes (`data.frame`) with the simple feature geometry column (`sfc`).
+They are created with `st_sf()` as illustrated below, which creates the London example described above: -->
+
+为了说明属性，我们以“2017 年 6 月 21 日伦敦 25°C 温度”为示例。此示例包含几何（坐标）和三个具有不同类别的属性（地名、温度和日期）。^[其他属性可能包括城市或村庄等类别，或者一条备注来说明是否是自动气象站测量的。]`sf`类的对象通过将属性（`data.frame`）与简单要素几何列（`sfc`）组合来表示此类数据。它们使用`st_sf()`创建，如下所示，它创建了上述伦敦的示例： 
+
+```{r 02-spatial-data-33}
+lnd_point = st_point(c(0.1, 51.5))                 # sfg 对象
+lnd_geom = st_sfc(lnd_point, crs = 4326)           # sfc 对象
+lnd_attrib = data.frame(                           # data.frame 对象
+  name = "London",
+  temperature = 25,
+  date = as.Date("2017-06-21")
+  )
+lnd_sf = st_sf(lnd_attrib, geometry = lnd_geom)    # sf 对象
+```
+
+<!-- What just happened? First, the coordinates were used to create the simple feature geometry (`sfg`).
+Second, the geometry was converted into a simple feature geometry column (`sfc`), with a CRS.
+Third, attributes were stored in a `data.frame`, which was combined with the `sfc` object with `st_sf()`.
+This results in an `sf` object, as demonstrated below (some output is ommited): -->
+
+上述代码做了什么？首先，使用坐标创建了简单要素几何 (`sfg`)。其次，将几何体转换为带有 CRS 的简单要素几何列 (`sfc`)。第三，属性被存储在`data.frame`中，然后使用`st_sf()`将其与`sfc`对象组合。最终生成一个`sf`对象，结果如下所示（省略了一些输出）： 
+
+```{r 02-spatial-data-34, eval=FALSE}
+lnd_sf
+#> Simple feature collection with 1 features and 3 fields
+#> ...
+#>     name temperature       date         geometry
+#> 1 London          25 2017-06-21 POINT (0.1 51.5)
+```
+
+```{r 02-spatial-data-35}
+class(lnd_sf)
+```
+
+<!-- The result shows that `sf` objects actually have two classes, `sf` and `data.frame`.
+Simple features are simply data frames (square tables), but with spatial attributes stored in a list column, usually called `geometry`, as described in Section \@ref(intro-sf).
+This duality is central to the concept of simple features:
+most of the time a `sf` can be treated as and behaves like a `data.frame`.
+Simple features are, in essence, data frames with a spatial extension. -->
+结果显示，`sf`对象实际上有两个类，`sf`和`data.frame`。简单要素实际上只是一个具有一列存储在列表中的空间属性的数据框，这一列通常称为`geometry`，如第 \@ref(intro-sf) 节所述。这种二元性是简单要素概念的核心：大多数情况下，`sf`对象可以像`data.frame`一样处理。简单要素本质上是具有空间扩展的数据框。 
+```{r 02-spatial-data-36, eval=FALSE, echo=FALSE}
+ruan_point = st_point(c(-9, 53))
+# sfc object
+our_geometry = st_sfc(lnd_point, ruan_point, crs = 4326)
+# data.frame object
+our_attributes = data.frame(
+  name = c("London", "Ruan"),
+                            temperature = c(25, 13),
+                            date = c(as.Date("2017-06-21"), as.Date("2017-06-22")),
+                            category = c("city", "village"),
+                            automatic = c(FALSE, TRUE))
+# sf object
+sf_points = st_sf(our_attributes, geometry = our_geometry)
+```
+
+
+<!-- https://r-spatial.github.io/sf/articles/sf1.html#how-attributes-relate-to-geometries -->
+
+<!-- ## Raster data -->
+## 栅格数据 {#raster-data}
+
+<!-- The geographic raster data model usually consists of a raster header
+and a matrix (with rows and columns) representing equally spaced cells (often also called pixels; Figure \@ref(fig:raster-intro-plot):A).^[
+Depending on the file format the header is part of the actual image data file, e.g., GeoTIFF, or stored in an extra header or world file, e.g., ASCII grid formats. There is also the headerless (flat) binary raster format which should facilitate the import into various software programs.] -->
+
+<!-- The raster header defines the coordinate reference system, the extent and the origin.
+The origin (or starting point) is frequently the coordinate of the lower-left corner of the matrix (the **raster** package, however, uses the upper left corner, by default (Figure  \@ref(fig:raster-intro-plot):B)).
+The header defines the extent via the number of columns, the number of rows and the cell size resolution.
+Hence, starting from the origin, we can easily access and modify each single cell by either using the ID of a cell  (Figure  \@ref(fig:raster-intro-plot):B) or by explicitly specifying the rows and columns.
+This matrix representation avoids storing explicitly the coordinates for the four corner points (in fact it only stores one coordinate, namely the origin) of each cell corner as would be the case for rectangular vector polygons.
+This and map algebra makes raster processing much more efficient and faster than vector data processing.
+However, in contrast to vector data, the cell of one raster layer can only hold a single value.
+The value might be numeric or categorical (Figure  \@ref(fig:raster-intro-plot):C). -->
+地理栅格数据模型通常由栅格头信息和一个矩阵组成，其中矩阵表示等间距的单元格（通常也称为像素；图 \@ref(fig:raster-intro-plot):A）。^[头信息可以是数据文件的一部分，例如 GeoTIFF，也可以是存储在额外的文件中，例如 ASCII 格式的网格。还有一种无头（平面）二进制栅格格式，它可以方便地导入各种软件程序。]栅格头信息定义了坐标参考系统、范围和起点。起点通常是矩阵左下角的坐标（然而，**raster** 包默认使用左上角，如图 \@ref(fig:raster-intro-plot):B 所示）。头信息通过列数、行数和单元格大小分辨率定义了范围。因此，从起点开始，我们可以通过单元格的 ID（图 \@ref(fig:raster-intro-plot):B）或显式指定行和列来轻松访问和修改每个单元格。矩形矢量多边形会存储四个边界点的坐标，而这种矩阵表示则避免了这种冗余（它实际上只存储一个坐标，即起点）。这种表示方法和地图代数使得栅格处理比矢量数据处理更快更高效。然而，与矢量数据相比，一个栅格层的单元格只能容纳一个值。该值可以是数值或分类值（图 \@ref(fig:raster-intro-plot):C）。 
+
+```{r raster-intro-plot, echo = FALSE, fig.cap = "栅格数据类型：（A）单元格 ID，（B）单元格值，（C）彩色栅格地图。", fig.scap="Raster data types."}
+# Raster data types: (A) cell IDs, (B) cell values, (C) a colored raster map.", fig.scap="Raster data types.
+source("code/02_raster_intro_plot.R")
+```
+
+<!-- Raster maps usually represent continuous phenomena such as elevation, temperature, population density or spectral data (Figure \@ref(fig:raster-intro-plot2)).
+Of course, we can represent discrete features such as soil or land-cover classes also with the help of a raster data model (Figure \@ref(fig:raster-intro-plot2)).
+Consequently, the discrete borders of these features become blurred, and depending on the spatial task a vector representation might be more suitable. -->
+
+栅格地图通常表示连续数值的指标，例如高程、温度、人口密度或光谱数据（图 \@ref(fig:raster-intro-plot2)）。当然，我们也可以使用栅格数据模型来表示离散特征，例如土壤或土地覆盖类（图 \@ref(fig:raster-intro-plot2)）。但是这些特征的离散边界会变得模糊，使用矢量表示可能更合适。
+
+```{r raster-intro-plot2, echo=FALSE, fig.cap="连续和分类栅格的示例。", warning=FALSE, message=FALSE}
+# Examples of continuous and categorical rasters.
+source("code/02_raster_intro_plot2.R", print.eval = TRUE)
+```
+
+<!-- ### An introduction to raster -->
+### 栅格数据简介 {#an-introduction-to-raster}
+
+<!-- The **raster** package supports raster objects in R. 
+It provides an extensive set of functions to create, read, export, manipulate and process raster datasets.
+Aside from general raster data manipulation, **raster** provides many low-level functions that can form the basis to develop more advanced raster functionality.
+**raster** also lets you work on large raster datasets that are too large to fit into the main memory. 
+In this case, **raster** provides the possibility to divide the raster into smaller chunks (rows or blocks), and processes these iteratively instead of loading the whole raster file into RAM (for more information, please refer to `vignette("functions", package = "raster")`. -->
+**raster** 包支持 R 中的栅格对象。它提供了丰富的函数用于创建、读取、导出、处理栅格数据集。除了常用的栅格数据操作外，**raster** 还提供了许多低级函数，可以组合开发出更高级的栅格处理功能。**raster** 还可以处理比内存更大的栅格数据集。在这种情况下，**raster** 提供了流式处理的功能，它将栅格分成较小的块（行或块），并迭代地处理这些块而不是将整个栅格文件全部加载到内存（有关更多信息，请参见 `vignette("functions", package = "raster")`）。 
+
+<!-- For the illustration of **raster** concepts, we will use datasets from the **spDataLarge** (note these packages were loaded at the beginning of the chapter).
+It consists of a few raster objects and one vector object covering an area of the Zion National Park (Utah, USA).
+For example, `srtm.tif` is a digital elevation model of this area (for more details, see its documentation `?srtm`).
+First, let's create a `RasterLayer` object named `new_raster`: -->
+为了演示 **raster**，我们使用来自 **spDataLarge** 的数据集（注意，这些包在本章的开头已加载）。它由几个栅格对象和一个覆盖锡安国家公园（Zion National Park，位于美国犹他州）区域的矢量对象组成。其中，`srtm.tif` 文件记录了该区域的数字高程模型（有关更多详细信息，请参见其文档 `?srtm`）。首先，让我们创建一个名为 `new_raster` 的 `RasterLayer` 对象： 
+
+```{r 02-spatial-data-37, message=FALSE}
+raster_filepath = system.file("raster/srtm.tif", package = "spDataLarge")
+new_raster = raster(raster_filepath)
+```
+
+<!-- Typing the name of the raster into the console, will print out the raster header (extent, dimensions, resolution, CRS) and some additional information (class, data source name, summary of the raster values):  -->
+
+在控制台中输入栅格的名称，将打印出栅格头信息（范围、维度、分辨率、CRS）和一些附加信息（类、数据源名称、栅格值的摘要）： 
+
+```{r 02-spatial-data-38, eval=FALSE}
+new_raster
+#> class       : RasterLayer 
+#> dimensions  : 457, 465, 212505  (nrow, ncol, ncell)
+#> resolution  : 0.000833, 0.000833  (x, y)
+#> extent      : -113, -113, 37.1, 37.5  (xmin, xmax, ymin, ymax)
+#> coord. ref. : +proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0 
+#> data source : /home/robin/R/x86_64-pc-linux../3.5/spDataLarge/raster/srtm.tif 
+#> names       : srtm 
+#> values      : 1024, 2892  (min, max)
+```
+
+<!-- Dedicated functions report each component: `dim(new_raster)` returns the number of rows, columns and layers; the `ncell()` function the number of cells (pixels); `res()` the raster's spatial resolution; `extent()` its spatial extent; and `crs()` its coordinate reference system (raster reprojection is covered in Section \@ref(reprojecting-raster-geometries)).
+`inMemory()` reports whether the raster data is stored in memory (the default) or on disk. -->
+
+还有多个专用函数可以输出不同的信息：`dim(new_raster)` 返回行数、列数和层数；`ncell()` 函数返回单元格（像素）的数量；`res()` 返回栅格的空间分辨率；`extent()` 返回其空间范围；`crs()` 返回其坐标参考系统（栅格重投影在第 \@ref(reprojecting-raster-geometries) 节中介绍）。`inMemory()` 报告了栅格数据是存储在内存中（默认）还是存储在磁盘上。 
+
+<!--
+```{r 02-spatial-data-39}
+# 连续型变量的摘要
+summary(new_raster)
+```
+
+```{r new_raster-hist}
+# 直方图
+hist(new_raster)
+```
+
+ `getValues()` extracts the values of a raster as a numerical vector.
+To only select specific rows, use the `row` parameter.  
+
+```{r 02-spatial-data-40}
+new_raster_values = getValues(new_raster)
+head(new_raster_values)
+```
+
+The new vector, `new_raster_values`, can serve as input for subsequent statistical operations.
+-->
+
+<!-- `help("raster-package")` returns a full list of all available **raster** functions. -->
+
+`help("raster-package")`命令返回 **raster** 包中所有可用函数的完整列表。 
+
+<!-- ### Basic map making {#basic-map-raster} -->
+### 基本地图制作 {#basic-map-raster}
+
+<!-- Similar to the **sf** package, **raster** also provides `plot()` methods for its own classes. -->
+与 **sf** 包类似，**raster** 包也为它自己的类提供了 `plot()` 方法。 
+```{r basic-new-raster-plot, fig.cap="基本的栅格绘图。"}
+plot(new_raster)
+```
+
+<!-- There are several other approaches for plotting raster data in R that are outside the scope of this section, including:
+
+- Functions such as `spplot()` and `levelplot()` (from the **sp** and **rasterVis** packages, respectively) to create facets, a common technique for visualizing change over time.
+- Packages such as **tmap**, **mapview** and **leaflet** to create interactive maps of raster and vector objects (see Chapter \@ref(adv-map)).  -->
+
+在 R 中，还有其他几种绘制栅格数据的方法，不过这些超出了本节的范围。包括：
+
+- 使用 `spplot()` 和 `levelplot()` 函数（分别来自 **sp** 和 **rasterVis** 包）创建多面板图，这是一种常见的可视化随时间变化的数据的技术。
+- 使用 **tmap**、**mapview** 和 **leaflet** 等包创建栅格和矢量对象的交互式地图（参见第 \@ref(adv-map) 章）。 
+
+<!-- ### Raster classes {#raster-classes} -->
+### 栅格类 {#raster-classes}
+
+<!-- The `RasterLayer` class represents the simplest form of a raster object, and consists of only one layer.
+The easiest way to create a raster object in R is to read-in a raster file from disk or from a server. -->
+
+`RasterLayer`类是栅格对象最简单的表示，仅包含一个图层。在 R 中创建栅格对象的最简单方法是从磁盘或服务器中读取栅格文件。
+
+```{r 02-spatial-data-41}
+raster_filepath = system.file("raster/srtm.tif", package = "spDataLarge")
+new_raster = raster(raster_filepath)
+```
+
+<!-- The **raster** package supports numerous drivers with the help of **rgdal**.
+To find out which drivers are available on your system, run `raster::writeFormats()` and `rgdal::gdalDrivers()`. -->
+
+在 **rgdal** 的帮助下，**raster** 包支持读写多种文件格式。要查看文件格式列表和系统上可用的驱动程序，请运行 `raster::writeFormats()` 和 `rgdal::gdalDrivers()`。 
+
+<!-- Rasters can also be created from scratch using the `raster()` function.
+This is illustrated in the subsequent code chunk, which results in a new `RasterLayer` object.
+The resulting raster consists of 36 cells (6 columns and 6 rows specified by `nrows` and `ncols`) centered around the Prime Meridian and the Equator (see `xmn`, `xmx`, `ymn` and `ymx` parameters).
+The CRS is the default of raster objects: WGS84.
+This means the unit of the resolution is in degrees which we set to 0.5 (`res`). 
+Values (`vals`) are assigned to each cell: 1 to cell 1, 2 to cell 2, and so on.
+Remember: `raster()` fills cells row-wise (unlike `matrix()`) starting at the upper left corner, meaning the top row contains the values 1 to 6, the second 7 to 12, etc. -->
+
+栅格对象还可以使用`raster()`函数从头创建。下面的代码块演示了如何创建一个新的 `RasterLayer` 对象。生成的栅格由 36 个单元格组成（由 `nrows` 和 `ncols` 指定 6 行 6 列），以本初子午线和赤道的交点为中心（请参见 `xmn`、`xmx`、`ymn` 和 `ymx` 参数）。CRS 参数使用栅格对象的默认值：WGS84。这意味着分辨率的单位是度，我们将其设置为 0.5（`res`参数）。每个单元格都被赋予一个值（`vals`参数）：1 赋值给单元格 1，2 赋值给单元格 2，以此类推。请注意：`raster()`按行填充单元格（与 `matrix()`不同），从左上角开始，这意味着第一行包含值 1 到 6，第二行包含值 7 到 12，以此类推。
+
+```{r 02-spatial-data-42}
+new_raster2 = raster(nrows = 6, ncols = 6, res = 0.5, 
+                     xmn = -1.5, xmx = 1.5, ymn = -1.5, ymx = 1.5,
+                     vals = 1:36)
+```
+
+<!-- For other ways of creating raster objects, see `?raster`. -->
+其他创建栅格对象的方法，请参见`?raster`。
+
+<!-- Aside from `RasterLayer`, there are two additional classes: `RasterBrick` and `RasterStack`.
+Both can handle multiple layers, but differ regarding the number of supported file formats, type of internal representation and processing speed. -->
+
+除了 `RasterLayer` 之外，还有两个额外的类：`RasterBrick` 和 `RasterStack`。两者都可以处理多个图层，但在支持的文件格式数量、内部表示类型和处理速度方面有所差异。
+
+<!-- A `RasterBrick` consists of multiple layers, which typically correspond to a single multispectral satellite file or a single multilayer object in memory. 
+The `brick()` function creates a `RasterBrick` object.
+Usually, you provide it with a filename to a multilayer raster file but might also use another raster object and other spatial objects (see `?brick` for all supported formats). -->
+
+`RasterBrick`由多个图层组成，通常对应于单个多光谱卫星文件或单个多层对象。`brick()` 函数可以创建一个 `RasterBrick` 对象。通常，你需要提供一个多层栅格文件的文件名，但也可以使用其他栅格对象和其他空间对象（请参见 `?brick` 以获取所有支持的格式）。 
+
+```{r 02-spatial-data-45}
+multi_raster_file = system.file("raster/landsat.tif", package = "spDataLarge")
+r_brick = brick(multi_raster_file)
+```
+
+```{r 02-spatial-data-46, eval=FALSE}
+r_brick
+#> class       : RasterBrick 
+#> resolution  : 30, 30  (x, y)
+#> ...
+#> names       : landsat.1, landsat.2, landsat.3, landsat.4 
+#> min values  :      7550,      6404,      5678,      5252 
+#> max values  :     19071,     22051,     25780,     31961
+```
+
+<!-- `nlayers()` retrieves the number of layers stored in a `Raster*` object: -->
+`nlayers()` 函数用于检索存储在 `Raster*` 对象中的图层数量。 
+
+```{r 02-spatial-data-47}
+nlayers(r_brick)
+```
+
+<!-- A `RasterStack` is similar to a `RasterBrick` in the sense that it consists also of multiple layers.
+However, in contrast to `RasterBrick`, `RasterStack` allows you to connect several raster objects stored in different files or multiply objects in memory.
+More specifically, a `RasterStack` is a list of `RasterLayer` objects with the same extent and resolution. 
+Hence, one way to create it is with the help of spatial objects already existing in R's global environment. 
+And again, one can simply specify a path to a file stored on disk. -->
+
+`RasterStack` 类似于 `RasterBrick`，由多个图层组成。但与 `RasterBrick` 不同的是，`RasterStack` 允许你连接存储在不同文件或内存中的多个栅格对象。更具体地说，`RasterStack` 是具有相同范围和分辨率的 `RasterLayer` 对象列表。因此，创建 `RasterStack` 的一种方法是使用已存在于 R 全局环境中的空间对象。同样，也可以简单地指定存储在磁盘上的文件路径。 
+
+```{r 02-spatial-data-48}
+raster_on_disk = raster(r_brick, layer = 1)
+raster_in_memory = raster(xmn = 301905, xmx = 335745,
+                          ymn = 4111245, ymx = 4154085, 
+                          res = 30)
+values(raster_in_memory) = sample(seq_len(ncell(raster_in_memory)))
+crs(raster_in_memory) = crs(raster_on_disk)
+```
+
+```{r 02-spatial-data-49, eval=FALSE}
+r_stack = stack(raster_in_memory, raster_on_disk)
+r_stack
+#> class : RasterStack
+#> dimensions : 1428, 1128, 1610784, 2
+#> resolution : 30, 30
+#> ...
+#> names       :   layer, landsat.1 
+#> min values  :       1,      7550 
+#> max values  : 1610784,     19071
+```
+
+<!-- Another difference is that the processing time for `RasterBrick` objects is usually shorter than for `RasterStack` objects. -->
+另一个区别是，`RasterBrick` 对象的处理时间通常比 `RasterStack` 对象短。
+
+<!-- Decision on which `Raster*` class should be used depends mostly on a character of input data. 
+Processing of a single mulitilayer file or object is the most effective with `RasterBrick`, while `RasterStack` allows calculations based on many files, many `Raster*` objects, or both. -->
+
+选择使用哪个 `Raster*` 类主要取决于输入数据的特性。处理单个多层文件或对象时，使用`RasterBrick`最高效，而`RasterStack`允许基于多个文件、多个`Raster*`对象或两者的混合进行计算。
+
+```{block2 02-spatial-data-50, type='rmdnote'}
+<!-- Operations on `RasterBrick` and `RasterStack` objects will typically return a `RasterBrick`. -->
+
+对`RasterBrick`和`RasterStack`对象的操作通常会返回一个`RasterBrick`对象。 
+```
+
+<!-- ## Coordinate Reference Systems {#crs-intro} -->
+## 坐标参考系 {#crs-intro}
+
+<!-- Vector and raster spatial data types share concepts intrinsic to spatial data.
+Perhaps the most fundamental of these is the Coordinate Reference System (CRS), which defines how the spatial elements of the data relate to the surface of the Earth (or other bodies).
+CRSs are either geographic or projected, as introduced at the beginning of this chapter (see Figure \@ref(fig:vectorplots)).
+This section will explain each type, laying the foundations for Section \@ref(reproj-geo-data) on CRS transformations. -->
+
+不论是矢量数据还是栅格数据，空间数据的固有概念是共通的。也许最基本的概念之一是坐标参考系统（CRS），它定义了数据的空间元素与地球表面（或其他物体）的关系。CRS 可以是地理坐标系或投影坐标系，这在本章开头已经介绍过（请参见图 \@ref(fig:vectorplots)）。本节将解释这两类坐标系，为第 \@ref(reproj-geo-data) 节的 CRS 转换奠定基础。 
+
+<!-- ### Geographic coordinate systems -->
+### 地理坐标系 {#geographic-coordinate-systems}
+
+<!-- Geographic coordinate systems identify any location on the Earth's surface using two values --- longitude and latitude. 
+*Longitude* is location in the East-West direction in angular distance from the Prime Meridian plane.
+*Latitude* is angular distance North or South of the equatorial plane.
+Distances in geographic CRSs are therefore not measured in meters.
+This has important consequences, as demonstrated in Section \@ref(reproj-geo-data). -->
+
+地理坐标系使用经度和纬度两个值来标识地球表面上的任何位置。*经度* 是指东西方向上与本初子午线平面的角度距离。*纬度* 是指距赤道平面向北或向南的角度距离。因此，地理坐标系中的距离不是以米为单位进行测量的。这点很重要，详见第 \@ref(reproj-geo-data) 节。 
+
+<!-- The surface of the Earth in geographic coordinate systems is represented by a spherical or ellipsoidal surface.
+Spherical models assume that the Earth is a perfect sphere of a given radius.
+Spherical models have the advantage of simplicity but are rarely used because they are inaccurate: the Earth is not a sphere!
+Ellipsoidal models are defined by two parameters: the equatorial radius and the polar radius.
+These are suitable because the Earth is compressed: the equatorial radius is around 11.5 km longer than the polar radius [@maling_coordinate_1992].^[
+The degree of compression is often referred to as *flattening*, defined in terms of the equatorial radius ($a$) and polar radius ($b$) as follows: $f = (a - b) / a$. The terms *ellipticity* and *compression* can also be used [@maling_coordinate_1992]. Because $f$ is a rather small value, digital ellipsoid models use the 'inverse flattening' ($rf = 1/f$) to define the Earth's compression.
+Values of $a$ and $rf$ in various ellipsoidal models can be seen by executing `st_proj_info(type = "ellps")`.
+] -->
+
+地理坐标系中的地球表面可以用球面或椭球面来表示。球面模型假设地球是一个给定半径的完美球体。球面模型具有简单性的优点，但很少使用，因为它们不准确：地球不是一个完美球体！椭球面模型由两个参数定义：赤道半径和极半径。这个模型是合适的，因为地球是扁的：赤道半径比极半径长约11.5公里[@maling_coordinate_1992]。^[压缩程度通常称为*扁率*，以赤道半径($a$)和极半径($b$)定义，如下所示：$f = (a - b) / a$。也可以使用*椭圆度*和*压缩度*这两个术语[@maling_coordinate_1992]。由于$f$是一个相当小的值，椭球模型使用“反扁率”($rf = 1/f$)来定义地球的压缩。各种椭球模型中的$a$和$rf$的值可以通过执行`st_proj_info(type = "ellps")`来查看。译者注：在最新的`sf`包中，`st_proj_info` 函数已更名为 `sf_proj_info`。]
+
+<!-- Ellipsoids are part of a wider component of CRSs: the *datum*.
+This contains information on what ellipsoid to use (with the `ellps` parameter in the PROJ CRS library) and the precise relationship between the Cartesian coordinates and location on the Earth's surface.
+These additional details are stored in the `towgs84` argument of  [proj4string](https://proj4.org/operations/conversions/latlon.html?highlight=towgs#cmdoption-arg-towgs84) notation (see [proj4.org/parameters.html](https://proj4.org/usage/projections.html) for details).
+These allow local variations in Earth's surface, for example due to large mountain ranges, to be accounted for in a local CRS.
+There are two types of datum --- local and geocentric.
+In a *local datum* such as `NAD83` the ellipsoidal surface is shifted to align with the surface at a particular location.
+In a *geocentric datum*  such as `WGS84` the center is the Earth's center of gravity and the accuracy of projections is not optimized for a specific location.
+Available datum definitions can be seen by executing `st_proj_info(type = "datum")`. -->
+
+椭球体是 CRSs 的更广泛组成部分---*基准面（datum）*的一部分。其中包含有关要使用哪个椭球体（使用 PROJ CRS 库中的 `ellps` 参数）以及笛卡尔坐标与地球表面位置之间的精确关系的信息。这些额外的细节存储在 [proj4string](https://proj4.org/operations/conversions/latlon.html?highlight=towgs#cmdoption-arg-towgs84) 符号中的 `towgs84` 参数中（有关详细信息，请参见 [proj4.org/parameters.html](https://proj4.org/usage/projections.html)）。基准面可以考虑地球表面的局部变化，例如大型山脉的存在，可以使用局部 CRS 来调整。有两种类型的基准：本地基准和地心基准。在本地基准中，例如 `NAD83`，椭球面被移动到与特定位置的表面对齐。在地心基准中，例如 `WGS84`，中心是地球的重心，投影的精度没有针对特定位置进行优化。可以通过执行 `st_proj_info(type = "datum")` 来查看可用的基准及其定义。 
+
+<!-- ### Projected coordinate reference systems  -->
+### 投影坐标参考系统 {#projected-coordinate-reference-systems}
+
+<!-- Projected CRSs are based on Cartesian coordinates on an implicitly flat surface.
+They have an origin, x and y axes, and a linear unit of measurement such as meters.
+All projected CRSs are based on a geographic CRS, described in the previous section, and rely on map projections to convert the three-dimensional surface of the Earth into Easting and Northing (x and y) values in a projected CRS. -->
+
+投影坐标参考系统是基于隐含的平面上的笛卡尔坐标。它们有一个原点、x 和 y 轴，以及一个线性测量单位，例如米。所有投影坐标参考系都是基于某个地理坐标参考系，前面的章节已经介绍过，依靠地图投影将地球的三维表面转换为投影坐标参考系中的东向和北向（x 和 y）坐标。 
+
+<!-- This transition cannot be done without adding some distortion.
+Therefore, some properties of the Earth's surface are distorted in this process, such as area, direction, distance, and shape.
+A projected coordinate system can preserve only one or two of those properties.
+Projections are often named based on a property they preserve: equal-area preserves area, azimuthal preserve direction, equidistant preserve distance, and conformal preserve local shape. -->
+
+这种转换过程中不可避免地会引入一些畸变。因此，地球表面的某些属性，如面积、方向、距离和形状，都会在这个过程中发生畸变。投影坐标系只能保留其中的一到两个属性。投影通常根据它们保留的属性进行命名：等面积投影保持面积不变，方位角投影保持方向，等距投影保持距离，共形投影保持局部形状。 
+
+<!-- There are three main groups of projection types - conic, cylindrical, and planar.
+In a conic projection, the Earth's surface is projected onto a cone along a single line of tangency or two lines of tangency. 
+Distortions are minimized along the tangency lines and rise with the distance from those lines in this projection.
+Therefore, it is the best suited for maps of mid-latitude areas.
+A cylindrical projection maps the surface onto a cylinder.
+This projection could also be created by touching the Earth's surface along a single line of tangency or two lines of tangency. 
+Cylindrical projections are used most often when mapping the entire world.
+A planar projection projects data onto a flat surface touching the globe at a point or along a line of tangency. 
+It is typically used in mapping polar regions.
+`st_proj_info(type = "proj")` gives a list of the available projections supported by the PROJ library. -->
+
+投影类型主要分为三类：圆锥形、柱面形和平面形。在圆锥形投影中，地球表面沿着一个或两个正切线被投影到一个圆锥体上。在这种投影中，正切线上的畸变最小，畸变并随着与正切线的距离增加而增大。因此，它最适合用于中纬度地区的地图。柱面形投影将地球表面投影到一个圆柱体上。这种投影也可以通过沿着一个或两个正切线接触地球表面来创建。当绘制整个世界地图时，柱面形投影最常用。平面形投影将数据投影到一个在点或正切线处接触地球的平面上。它通常用于极地地区的制图。`st_proj_info(type = "proj")`列出了 PROJ 库支持的可用投影列表。
+
+<!-- ### CRSs in R {#crs-in-r} -->
+### R 中的 CRS {#crs-in-r}
+
+<!-- Two main ways to describe CRS in R are an `epsg` code or a `proj4string` definition.
+Both of these approaches have advantages and disadvantages. 
+An `epsg` code is usually shorter, and therefore easier to remember. 
+The code also refers to only one, well-defined coordinate reference system. 
+On the other hand, a `proj4string` definition allows you more flexibility when it comes to specifying different parameters such as the projection type, the datum and the ellipsoid.^[
+A complete list of the `proj4string` parameters can be found at https://proj4.org/.
+] 
+This way you can specify many different projections, and modify existing ones.
+This also makes the `proj4string` approach more complicated. `epsg` points to exactly one particular CRS. -->
+
+在 R 中描述 CRS 有两种主要方法：`epsg`代码和`proj4string`定义。这两种方法各有优劣。`epsg` 代码通常较短，更容易记忆，它还暗含了一个唯一的，明确定义好的坐标参考系统。另一方面，`proj4string` 定义在指定不同参数（如投影类型、基准面和椭球体）方面具有更大的灵活性。^[完整的 `proj4string` 参数列表可以在 https://proj4.org/ 找到。] 使用 `proj4string` 可以指定许多不同的投影，并修改现有的投影。这也使 `proj4string` 方法更加复杂。而 `epsg` 则指向一个确切的特定的 CRS。 
+
+<!-- Spatial R packages support a wide range of CRSs and they use the long-established [PROJ](http://proj4.org/) library.
+Other than searching for EPSG codes online, another quick way to find out about available CRSs is via the `rgdal::make_EPSG()` function, which outputs a data frame of available projections.
+Before going into more detail, it's worth learning how to view and filter them inside R, as this could save time trawling the internet.
+The following code will show available CRSs interactively, allowing you to filter ones of interest (try filtering for the OSGB CRSs for example): -->
+
+相关的 R 包支持丰富的坐标参考系，它们主要使用历史悠久的 [PROJ](http://proj4.org/) 库。除了在线搜索 EPSG 代码之外，另一种快速了解可用 CRS 的方法是通过 `rgdal::make_EPSG()` 函数，它输出一个包含可用投影的数据框。在进一步了解更多细节之前，值得学习如何在 R 中查看和过滤它们，这可以节省在互联网上搜索的时间。以下代码将交互式地显示可用的 CRS，可以过滤感兴趣的 CRS（读者可以尝试过滤 OSGB CRS）： 
+
+```{r 02-spatial-data-51, eval=FALSE}
+crs_data = rgdal::make_EPSG()
+View(crs_data)
+```
+
+<!-- In **sf** the CRS of an object can be retrieved using `st_crs()`.
+For this, we need to read-in a vector dataset: -->
+
+在 **sf** 中，可以使用 `st_crs()` 获取对象的 CRS。为了举例说明，我们先读取一个矢量数据集： 
+
+```{r 02-spatial-data-52, message=FALSE, results='hide'}
+vector_filepath = system.file("vector/zion.gpkg", package = "spDataLarge")
+new_vector = st_read(vector_filepath)
+```
+
+<!-- Our new object, `new_vector`, is a polygon representing the borders of Zion National Park (`?zion`). -->
+新对象 `new_vector` 是一个多边形，表示锡安国家公园的边界 (`?zion`)。
+
+```{r 02-spatial-data-53, eval=FALSE}
+st_crs(new_vector) # get CRS
+#> Coordinate Reference System:
+#> No EPSG code
+#> proj4string: "+proj=utm +zone=12 +ellps=GRS80 ... +units=m +no_defs"
+```
+
+<!-- In cases when a coordinate reference system (CRS) is missing or the wrong CRS is set, the `st_set_crs()` function can be used: -->
+在坐标参考系缺失或设置错误的情况下，可以使用 `st_set_crs()` 函数： 
+
+```{r 02-spatial-data-54}
+new_vector = st_set_crs(new_vector, 4326) # set CRS
+```
+
+<!-- The warning message informs us that the `st_set_crs()` function does not transform data from one CRS to another. -->
+警告消息告诉我们，`st_set_crs()` 函数不会将数据从一个 CRS 转换为另一个 CRS。 
+
+```{r vector-crs, echo=FALSE, fig.cap="矢量数据在地理坐标系（WGS 84；左）和投影坐标参考系（NAD83 / UTM zone 12N；右）下的示例。", message=FALSE, fig.asp=0.56, fig.scap="Examples of geographic and projected CRSs (vector data)."}
+
+# Examples of geographic (WGS 84; left) and projected (NAD83 / UTM zone 12N; right) coordinate systems for a vector data type.
+
+# source("https://github.com/Robinlovelace/geocompr/raw/master/code/02-vector-crs.R")
+knitr::include_graphics("figures/02_vector_crs.png")
+```
+
+<!-- The `projection()` function can be used to access CRS information from a `Raster*` object:  -->
+`projection()` 函数可用于从 `Raster*` 对象中访问 CRS 信息： 
+
+```{r 02-spatial-data-55}
+projection(new_raster) # get CRS
+```
+
+<!-- The same function, `projection()`, is used to set a CRS for raster objects.
+The main difference, compared to vector data, is that raster objects only accept `proj4` definitions: -->
+`projection()` 函数还可以用于为栅格对象设置 CRS。与矢量数据相比，主要区别在于，栅格对象仅接受 `proj4` 定义： 
+
+```{r 02-spatial-data-56}
+projection(new_raster) = "+proj=utm +zone=12 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 
+                            +units=m +no_defs" # set CRS
+```
+ 
+
+```{r raster-crs, echo=FALSE, fig.cap="矢量数据在地理坐标系（WGS 84；左）和投影坐标参考系（NAD83 / UTM zone 12N；右）下的示例。", message=FALSE, fig.asp=0.56, fig.scap="Examples of geographic and projected CRSs (raster data)."}
+# Examples of geographic (WGS 84; left) and projected (NAD83 / UTM zone 12N; right) coordinate systems for raster data.
+# source("https://github.com/Robinlovelace/geocompr/raw/master/code/02-raster-crs.R")
+knitr::include_graphics("figures/02_raster_crs.png")
+```
+
+<!-- We will expand on CRSs and how to project from one CRS to another in much more detail in Chapter \@ref(reproj-geo-data). -->
+
+我们将在第 \@ref(reproj-geo-data) 章中更详细地介绍 CRS 以及如何从一个 CRS 投影到另一个 CRS。 
+
+<!-- ## Units -->
+
+## 测量单位 {#units}
+
+<!-- https://cran.r-project.org/web/packages/units/vignettes/measurement_units_in_R.html -->
+
+<!-- An important feature of CRSs is that they contain information about spatial units.
+Clearly, it is vital to know whether a house's measurements are in feet or meters, and the same applies to maps.
+It is good cartographic practice to add a *scale bar* onto maps to demonstrate the relationship between distances on the page or screen and distances on the ground.
+Likewise, it is important to formally specify the units in which the geometry data or pixels are measured to provide context, and ensure that subsequent calculations are done in context. -->
+
+CRS 的一个重要特征是它们包含有关空间单位的信息。显然，知道一座房子的尺寸是以英尺还是米为单位非常重要，地图也是如此。在地图上添加比例尺是很好的实践经验，用来演示页面或屏幕上的距离与地面距离之间的关系。类似的，明确几何数据或像素的测量单位十分重要，后续的计算也要确保使用相同的测量单位。
+
+<!-- A novel feature of geometry data in `sf` objects is that they have *native support* for units.
+This means that distance, area and other geometric calculations in **sf** return values that come with a `units` attribute, defined by the **units** package [@pebesma_measurement_2016].
+This is advantageous, preventing confusion caused by different units (most CRSs use meters, some use feet) and providing information on dimensionality.
+This is demonstrated in the code chunk below, which calculates the area of Luxembourg: -->
+
+`sf` 对象中几何数据的一个新特性是它们对单位的原生支持。这意味着在 **sf** 中进行的距离、面积和其他几何计算会返回带有 `units` 属性的值，该属性由 **units** 包定义 [@pebesma_measurement_2016]。这可以避免由不同单位引起的混淆（大多数 CRS 使用米，有些使用英尺），并提供有关维度的信息。查看下面的代码演示，它计算了卢森堡的面积： 
+
+```{r 02-spatial-data-57}
+luxembourg = world[world$name_long == "Luxembourg", ]
+```
+
+```{r 02-spatial-data-58}
+st_area(luxembourg)
+```
+
+<!-- The output is in units of square meters (m^2^), showing that the result represents two-dimensional space.
+This information, stored as an attribute (which interested readers can discover with `attributes(st_area(luxembourg))`), can feed into subsequent calculations that use units, such as population density (which is measured in people per unit area, typically per km^2^).
+Reporting units prevents confusion.
+To take the Luxembourg example, if the units remained unspecified, one could incorrectly assume that the units were in hectares.
+To translate the huge number into a more digestible size, it is tempting to divide the results by a million (the number of square meters in a square kilometer): -->
+
+输出的单位为平方米（m^2^）。这些信息被存储为属性（读者可以执行 `attributes(st_area(luxembourg))` 查看），可以用于后续涉及到单位的计算，例如人口密度（通常以每平方公里的人数为单位）。报告单位可以避免混淆。以卢森堡为例，如果单位未指定，则可能错误地假设单位为公顷。为了将巨大的数字转换为更易读的形式，可以把结果除以一百万（一平方千米等于一百万平方米）： 
+```{r 02-spatial-data-59}
+st_area(luxembourg) / 1000000
+```
+
+<!-- However, the result is incorrectly given again as square meters. The solution is to set the correct units with the **units** package: -->
+
+但是直接除以一百万，结果中的单位仍然是平方米，这明显是错误的。解决方案是使用 **units** 包设置正确的单位： 
+
+```{r 02-spatial-data-60}
+units::set_units(st_area(luxembourg), km^2)
+```
+
+<!-- Units are of equal importance in the case of raster data.
+However, so far **sf** is the only spatial package that supports units, meaning that people working on raster data should approach changes in the units of analysis (for example, converting pixel widths from imperial to decimal units) with care.
+The `new_raster` object (see above) uses a WGS84 projection with decimal degrees as units.
+Consequently, its resolution is also given in decimal degrees but you have to know it, since the `res()` function simply returns a numeric vector. -->
+
+在栅格数据的处理过程中，单位同样重要。不过到目前为止，**sf** 是唯一支持单位的空间包，这意味着处理栅格数据的人们应该谨慎地处理分析单位的更改（例如，将像素宽度从英制转换为十进制单位）。`new_raster` 对象（见上文）使用 WGS84 投影，单位是十进制的度。因此，它的分辨率也以十进制的度给出，这点你必须心里有数，因为 `res()` 函数仅返回数值。 
+
+```{r 02-spatial-data-61}
+res(new_raster)
+```
+
+<!-- If we used the UTM projection, the units would change. -->
+如果我们使用 UTM 投影，单位将会改变。 
+
+```{r 02-spatial-data-62, warning=FALSE, message=FALSE}
+repr = projectRaster(new_raster, crs = "+init=epsg:26912")
+res(repr)
+```
+
+<!-- Again, the `res()` command gives back a numeric vector without any unit, forcing us to know that the unit of the UTM projection is meters. -->
+
+再次强调，`res()` 命令返回一个没有任何单位的数值向量，我们必须清楚 UTM 投影的单位是米。
+
+<!-- ## Exercises {#ex2} -->
+## 练习 {#ex2}
+
+
+<!-- 1. Use `summary()` on the geometry column of the `world` data object. What does the output tell us about:
+    - Its geometry type?
+    - The number of countries?
+    - Its coordinate reference system (CRS)? -->
+
+1. 对 `world` 数据对象的几何列使用 `summary()`。根据输出结果回答：
+    - 它的几何类型？
+    - 国家的数量？
+    - 它的坐标参考系统（CRS）？
+<!-- 1. Run the code that 'generated' the map of the world in Figure \@ref(fig:contpop) at the end of Section \@ref(base-args).
+Find two similarities and two differences between the image on your computer and that in the book.
+    - What does the `cex` argument do (see `?plot`)?
+    - Why was `cex` set to the `sqrt(world$pop) / 10000`?
+    - Bonus: experiment with different ways to visualize the global population. -->
+  
+2. 运行代码，生成第 \@ref(base-args) 节末尾，图 \@ref(fig:contpop) 中的世界地图。找出你生成的图与书中图像的两个相似之处和两个不同之处。
+    - `cex` 参数的作用是什么（见 `?plot`）？
+    - 为什么将 `cex` 设置为 `sqrt(world$pop) / 10000`？
+    - 附加题: 尝试用不同的方式来可视化全球人口。
+<!-- 2. Use `plot()` to create maps of Nigeria in context (see Section \@ref(base-args)).
+    - Adjust the `lwd`, `col` and `expandBB` arguments of `plot()`. 
+    - Challenge: read the documentation of `text()` and annotate the map. -->
+
+3. 使用 `plot()` 函数创建尼日利亚的地图（参见第 \@ref(base-args) 节）。
+    - 调整 `plot()` 函数的 `lwd`、`col` 和 `expandBB` 参数。
+    - 挑战：阅读 `text()` 函数的文档，并在地图里添加注释。
+   
+<!-- raster exercises -->
+<!-- 1. Create an empty `RasterLayer` object called `my_raster` with 10 columns and 10 rows.
+Assign random values between 0 and 10 to the new raster and plot it.
+1. Read-in the `raster/nlcd2011.tif` file from the **spDataLarge** package. 
+What kind of information can you get about the properties of this file?
+
+Reminder: solutions can be found online at https://geocompr.github.io -->
+
+4. 创建一个名为 `my_raster` 的空 `RasterLayer` 对象，它有 10 列和 10 行。将新栅格赋予 0 到 10 之间的随机值并绘制它。
+   
+5. 从 **spDataLarge** 包中读取 `raster/nlcd2011.tif` 文件。关于此文件属性，你可以获取哪些信息？
+
+提示：答案可以在 https://geocompr.github.io 上找到。 

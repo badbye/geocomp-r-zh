@@ -1,0 +1,20 @@
+```{asis mainmatter, echo=knitr::is_latex_output()}
+\mainmatter
+```
+
+# 简介 {#intro}
+
+
+## 什么是地理计算？{#what-is-geocomputation}
+
+## 为什么使用 R 语言进行地理计算？{#why-use-r-for-geocomputation}
+
+
+## 地理计算软件 {#software-for-geocomputation}
+
+
+## R 语言中地理计算的软件生态 {#r-ecosystem}
+
+## R 语言地理计算的发展史 {#the-history-of-r-spatial}
+
+## 练习
